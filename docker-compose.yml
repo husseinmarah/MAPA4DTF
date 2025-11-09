@@ -17,12 +17,15 @@ services:
       retries: 10
 
   opa:
-    image: openpolicyagent/opa:0.63.0   # ✅ latest stable working tag
+    image: openpolicyagent/opa:1.10.1   # ✅ Standard OPA image for REST API
     container_name: federated_opa
     ports:
-      - "8181:8181"
+      - "8181:8181"  # REST API port
     command: >
-      run --server --set=decision_logs.console=true /policies
+      run --server 
+      --addr=0.0.0.0:8181 
+      --set=decision_logs.console=true 
+      /policies
     volumes:
       - ./opa:/policies:ro
     healthcheck:
