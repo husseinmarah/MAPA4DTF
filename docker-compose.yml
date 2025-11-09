@@ -1,0 +1,33 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:21.1.1
+    container_name: federated_keycloak
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
+    command: start-dev --import-realm
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/realms/master"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  opa:
+    image: openpolicyagent/opa:0.63.0   # ✅ latest stable working tag
+    container_name: federated_opa
+    ports:
+      - "8181:8181"
+    command: >
+      run --server --set=decision_logs.console=true /policies
+    volumes:
+      - ./opa:/policies:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8181/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+

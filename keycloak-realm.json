@@ -1,0 +1,100 @@
+{
+  "id": "warehouse-federation",
+  "realm": "warehouse-federation",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "warehouse-client",
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "protocol": "openid-connect",
+      "defaultClientScopes": ["email", "profile", "roles", "web-origins"],
+      "protocolMappers": [
+        {
+          "name": "org",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "org",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "org",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "role",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "role",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "role",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "trustScore",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "trustScore",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "trustScore",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "FederationAgentManager",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "federation", "temporary": false }],
+      "attributes": {
+        "org": ["federation"],
+        "role": ["federation_manager"],
+        "trustScore": ["1.0"]
+      }
+    },
+    {
+      "username": "ProductionAgentManager",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "production", "temporary": false }],
+      "attributes": {
+        "org": ["production"],
+        "role": ["manager"],
+        "trustScore": ["0.95"]
+      }
+    },
+    {
+      "username": "RobotAgent",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "robot", "temporary": false }],
+      "attributes": {
+        "org": ["robotics"],
+        "role": ["worker"],
+        "trustScore": ["0.85"]
+      }
+    },
+    {
+      "username": "ConveyorAgent",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "conveyor", "temporary": false }],
+      "attributes": {
+        "org": ["conveyor"],
+        "role": ["worker"],
+        "trustScore": ["0.8"]
+      }
+    }
+  ]
+}
