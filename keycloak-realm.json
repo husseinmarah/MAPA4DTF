@@ -61,7 +61,7 @@
       "enabled": true,
       "credentials": [{ "type": "password", "value": "federation", "temporary": false }],
       "attributes": {
-        "org": ["federation"],
+        "org": ["main"],
         "role": ["federation_manager"],
         "trustScore": ["1.0"]
       }
@@ -71,7 +71,7 @@
       "enabled": true,
       "credentials": [{ "type": "password", "value": "production", "temporary": false }],
       "attributes": {
-        "org": ["production"],
+        "org": ["main"],
         "role": ["manager"],
         "trustScore": ["0.95"]
       }
@@ -81,7 +81,7 @@
       "enabled": true,
       "credentials": [{ "type": "password", "value": "robot", "temporary": false }],
       "attributes": {
-        "org": ["robotics"],
+        "org": ["Stakeholder1_RobotContainer"],
         "role": ["worker"],
         "trustScore": ["0.85"]
       }
@@ -91,7 +91,7 @@
       "enabled": true,
       "credentials": [{ "type": "password", "value": "conveyor", "temporary": false }],
       "attributes": {
-        "org": ["conveyor"],
+        "org": ["Stakeholder3_ConveyorContainer"],
         "role": ["worker"],
         "trustScore": ["0.8"]
       }
