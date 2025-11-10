@@ -65,21 +65,17 @@ public class ConveyorAgent extends Agent {
             }
         }
         
-        System.out.println("Agent " + getLocalName() + " started managing Conveyor " + conveyorId + " with interval: " + AGENT_INTERVAL + "ms");
-        
         // STEP 1: Authenticate with Keycloak
-        System.out.println("🔐 Authenticating Conveyor" + conveyorId + " with Keycloak...");
         securityManager = FederationSecurityManager.getInstance();
         securityContext = securityManager.authenticateWithKeycloak("ConveyorAgent", "conveyor");
         
         if (securityContext == null) {
-            System.err.println("❌ Keycloak authentication failed for ConveyorAgent");
-            System.err.println("⚠️ Falling back to local authentication");
+            System.err.println("┌─ AUTHENTICATION FALLBACK ────────────────────────");
+            System.err.println("│  ⚠️ Keycloak authentication failed");
+            System.err.println("│  Agent: " + getLocalName());
+            System.err.println("│  Using local authentication");
+            System.err.println("└──────────────────────────────────────────────────");
             securityManager.registerSecureAgent(getLocalName(), "Stakeholder3_ConveyorContainer", "Main-Container");
-        } else {
-            System.out.println("✅ Authenticated as: " + securityContext.agentName);
-            System.out.println("   Organization: " + securityContext.companyId);
-            System.out.println("   Security Level: " + securityContext.level);
         }
         
         // Add small delay to ensure ProductionAgentManager is ready

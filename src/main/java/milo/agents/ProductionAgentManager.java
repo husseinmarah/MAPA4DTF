@@ -101,21 +101,17 @@ public class ProductionAgentManager extends Agent {
     
     @Override
     protected void setup() {
-        System.out.println("[" + getLocalName() + "] Production Agent Manager starting...");
-        
         // STEP 1: Authenticate with Keycloak
-        System.out.println("🔐 Authenticating with Keycloak...");
         securityManager = FederationSecurityManager.getInstance();
         securityContext = securityManager.authenticateWithKeycloak("ProductionAgentManager", "production");
         
         if (securityContext == null) {
-            System.err.println("❌ Keycloak authentication failed for ProductionAgentManager");
-            System.err.println("⚠️ Falling back to local authentication");
+            System.err.println("┌─ AUTHENTICATION FALLBACK ────────────────────────");
+            System.err.println("│  ⚠️ Keycloak authentication failed");
+            System.err.println("│  Agent: " + getLocalName());
+            System.err.println("│  Using local authentication");
+            System.err.println("└──────────────────────────────────────────────────");
             securityManager.registerSecureAgent(getLocalName(), "main", "Main-Container");
-        } else {
-            System.out.println("✅ Authenticated as: " + securityContext.agentName);
-            System.out.println("   Organization: " + securityContext.companyId);
-            System.out.println("   Security Level: " + securityContext.level);
         }
 
         // Initialize data structures
@@ -123,20 +119,18 @@ public class ProductionAgentManager extends Agent {
         activeTasks = new ConcurrentHashMap<>();
         agentFFAs = new ConcurrentHashMap<>();
         
-        // Initialize federation capabilities
+        // Initialize federation and registration
         initializeFederation();
-        
-        // Register with Directory Facilitator
         registerWithDF();
         
         // Start management behaviors
         addBehaviour(new AgentRegistrationHandler());
         addBehaviour(new TaskAssignmentHandler());
         addBehaviour(new AcknowledgementHandler());
-        addBehaviour(new HeartbeatMonitor(this, 10000)); // Every 10 seconds
-        addBehaviour(new ProductionCoordinationBehaviour(this, 30000)); // Production coordination every 30 seconds
+        addBehaviour(new HeartbeatMonitor(this, 10000));
+        addBehaviour(new ProductionCoordinationBehaviour(this, 30000));
         
-        System.out.println("[" + getLocalName() + "] Production Agent Manager ready for coordination");
+        System.out.println("✅ " + getLocalName() + " ready (Production coordination active)");
     }
     
     /**
@@ -144,26 +138,18 @@ public class ProductionAgentManager extends Agent {
      */
     private void initializeFederation() {
         try {
-            System.out.println("[" + getLocalName() + "] Initializing federation as Production Manager...");
-            
             // Request FFA allocation for management role
             myFFA = FederationHelper.requestFFAAllocation(this, "ProductionManager", 1, "ProductionCoordination.Primary");
             
             if (myFFA != null) {
                 federationEnabled = true;
-                System.out.println("[" + getLocalName() + "] Federation enabled with FFA: " + myFFA);
-                
-                // Initialize hierarchical federation workflow as production coordinator
-                String workflowId = FederationHelper.initializeFederationWorkflow(
+                // Initialize hierarchical federation workflow
+                FederationHelper.initializeFederationWorkflow(
                     this, "hierarchical-federation", "EU/Plant7", "Manufacturing", "ProductionCoordination.Primary");
-                
-                if (workflowId != null) {
-                    System.out.println("[" + getLocalName() + "] Hierarchical federation workflow started: " + workflowId);
-                }
             }
             
         } catch (Exception e) {
-            System.err.println("[" + getLocalName() + "] Federation initialization failed: " + e.getMessage());
+            System.err.println("⚠️ Federation initialization failed: " + e.getMessage());
         }
     }
     
@@ -227,7 +213,12 @@ public class ProductionAgentManager extends Agent {
                 boolean messageAllowed = securityManager.validateMessageWithOPA(msg, senderName, receiverName);
                 
                 if (!messageAllowed) {
-                    System.out.println("🚫 PAM blocked registration from " + senderName + " (OPA policy denied)");
+                    System.out.println("┌─ REGISTRATION BLOCKED ────────────────────────────");
+                    System.out.println("│  🚫 OPA Policy Violation");
+                    System.out.println("│  From:     " + senderName);
+                    System.out.println("│  To:       " + myAgent.getLocalName());
+                    System.out.println("│  Action:   Agent Registration");
+                    System.out.println("└──────────────────────────────────────────────────");
                     sendRegistrationAck(msg.getSender(), "ERROR", "Security policy denies registration");
                     return;
                 }

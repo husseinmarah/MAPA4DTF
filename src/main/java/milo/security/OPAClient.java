@@ -86,7 +86,11 @@ public class OPAClient {
             
             try (Response response = httpClient.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
-                    System.err.println("[OPAClient] Failed to evaluate policy: HTTP " + response.code());
+                    System.err.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
+                    System.err.println("│  ⚠️ SERVICE ERROR - HTTP " + response.code());
+                    System.err.println("│  From: " + senderName + " (" + senderOrg + ")");
+                    System.err.println("│  To:   " + receiverName + " (" + receiverOrg + ")");
+                    System.err.println("└──────────────────────────────────────────────────");
                     return new PolicyDecision(false, "OPA service error", null);
                 }
                 
@@ -99,20 +103,39 @@ public class OPAClient {
                     "OPA policy allows communication" : 
                     "OPA policy denies communication";
                 
-                System.out.println("[OPAClient] Policy evaluation: " + 
-                    (allowed ? "✅ ALLOW" : "❌ DENY") + 
-                    " (" + senderName + " -> " + receiverName + ")");
+                if (allowed) {
+                    System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
+                    System.out.println("│  ✅ ALLOWED");
+                    System.out.println("│  From:        " + senderName + " (" + senderOrg + ")");
+                    System.out.println("│  To:          " + receiverName + " (" + receiverOrg + ")");
+                    System.out.println("│  Role:        " + senderRole);
+                    System.out.println("│  Trust Score: " + senderTrustScore);
+                    System.out.println("└──────────────────────────────────────────────────");
+                } else {
+                    System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
+                    System.out.println("│  ❌ DENIED");
+                    System.out.println("│  From:        " + senderName + " (" + senderOrg + ")");
+                    System.out.println("│  To:          " + receiverName + " (" + receiverOrg + ")");
+                    System.out.println("│  Role:        " + senderRole);
+                    System.out.println("│  Trust Score: " + senderTrustScore);
+                    System.out.println("│  Reason:      " + reason);
+                    System.out.println("└──────────────────────────────────────────────────");
+                }
                 
                 return new PolicyDecision(allowed, reason, requestBody.toString());
             }
             
         } catch (IOException e) {
-            System.err.println("[OPAClient] Error evaluating policy: " + e.getMessage());
-            // Fail-safe: deny on error
+            System.err.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
+            System.err.println("│  ⚠️ EVALUATION FAILED - " + e.getMessage());
+            System.err.println("│  Fail-safe: DENY");
+            System.err.println("└──────────────────────────────────────────────────");
             return new PolicyDecision(false, "OPA evaluation failed: " + e.getMessage(), null);
         } catch (Exception e) {
-            System.err.println("[OPAClient] Unexpected error: " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
+            System.err.println("│  ⚠️ UNEXPECTED ERROR - " + e.getMessage());
+            System.err.println("│  Fail-safe: DENY");
+            System.err.println("└──────────────────────────────────────────────────");
             return new PolicyDecision(false, "Unexpected error: " + e.getMessage(), null);
         }
     }

@@ -11,6 +11,7 @@ import milo.agents.ConveyorAgent;
 import milo.agents.FederationAgentManager;
 import milo.agents.ProductionAgentManager;
 import milo.agents.RobotAgent;
+import org.bouncycastle.asn1.cms.Time;
 
 /**
  * Dynamic Container - Creates agents based on SystemConfig values
@@ -67,6 +68,7 @@ public class Container {
                         RobotAgent.class.getName(), args);
                 robotAgent.start();
                 System.out.println("Started " + agentName + " in Stakeholder1_RobotContainer");
+                Thread.sleep(1000);
             }
             // Second half in stakeholder2Container
             for (int i = half + 1; i <= SystemConfig.NUM_ROBOTS; i++) {
@@ -76,6 +78,7 @@ public class Container {
                         RobotAgent.class.getName(), args);
                 robotAgent.start();
                 System.out.println("Started " + agentName + " in Stakeholder2_RobotContainer");
+                Thread.sleep(1000);
             }
 
             // Create multiple ConveyorAgents in stakeholder3Container
@@ -86,6 +89,7 @@ public class Container {
                         ConveyorAgent.class.getName(), args);
                 conveyorAgent.start();
                 System.out.println("Started " + agentName + " in Stakeholder3_ConveyorContainer");
+                Thread.sleep(1000);
             }
 
             System.out.println("=== Federation-enabled Multi-Agent System started ===");

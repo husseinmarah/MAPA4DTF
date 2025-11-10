@@ -85,7 +85,7 @@ public class KeycloakClient {
             
             return processor;
         } catch (Exception e) {
-            System.err.println("[KeycloakClient] Failed to create JWT processor: " + e.getMessage());
+            // Silent fail - will be handled during authentication
             return null;
         }
     }
@@ -115,7 +115,10 @@ public class KeycloakClient {
             
             try (Response response = httpClient.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
-                    System.err.println("[KeycloakClient] Authentication failed: HTTP " + response.code());
+                    System.err.println("┌─ KEYCLOAK AUTHENTICATION ────────────────────────");
+                    System.err.println("│  ❌ FAILED - HTTP " + response.code());
+                    System.err.println("│  Agent: " + username);
+                    System.err.println("└──────────────────────────────────────────────────");
                     return null;
                 }
                 
@@ -129,20 +132,26 @@ public class KeycloakClient {
                 // Parse token to extract user attributes
                 UserAttributes userAttrs = parseToken(accessToken);
                 
-                System.out.println("[KeycloakClient] ✅ Authentication successful for: " + username);
-                System.out.println("[KeycloakClient]    Org: " + userAttrs.org);
-                System.out.println("[KeycloakClient]    Role: " + userAttrs.role);
-                System.out.println("[KeycloakClient]    Trust Score: " + userAttrs.trustScore);
+                System.out.println("┌─ KEYCLOAK AUTHENTICATION ────────────────────────");
+                System.out.println("│  ✅ SUCCESS");
+                System.out.println("│  Agent:       " + username);
+                System.out.println("│  Org:         " + userAttrs.org);
+                System.out.println("│  Role:        " + userAttrs.role);
+                System.out.println("│  Trust Score: " + userAttrs.trustScore);
+                System.out.println("└──────────────────────────────────────────────────");
                 
                 return new AuthToken(accessToken, refreshToken, expiresIn, userAttrs);
             }
             
         } catch (IOException e) {
-            System.err.println("[KeycloakClient] Authentication error: " + e.getMessage());
+            System.err.println("┌─ KEYCLOAK AUTHENTICATION ────────────────────────");
+            System.err.println("│  ❌ ERROR - " + e.getMessage());
+            System.err.println("└──────────────────────────────────────────────────");
             return null;
         } catch (Exception e) {
-            System.err.println("[KeycloakClient] Unexpected error: " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("┌─ KEYCLOAK AUTHENTICATION ────────────────────────");
+            System.err.println("│  ❌ UNEXPECTED ERROR - " + e.getMessage());
+            System.err.println("└──────────────────────────────────────────────────");
             return null;
         }
     }

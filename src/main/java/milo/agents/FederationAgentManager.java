@@ -34,21 +34,17 @@ public class FederationAgentManager extends Agent {
 
     @Override
     protected void setup() {
-        System.out.println("🏗️ " + getLocalName() + " starting (Federation Address Manager)");
-        
         // STEP 1: Authenticate with Keycloak
-        System.out.println("🔐 Authenticating with Keycloak...");
         securityManager = FederationSecurityManager.getInstance();
         securityContext = securityManager.authenticateWithKeycloak("FederationAgentManager", "federation");
         
         if (securityContext == null) {
-            System.err.println("❌ Keycloak authentication failed for FederationAgentManager");
-            System.err.println("⚠️ Falling back to local authentication");
+            System.err.println("┌─ AUTHENTICATION FALLBACK ────────────────────────");
+            System.err.println("│  ⚠️ Keycloak authentication failed");
+            System.err.println("│  Agent: " + getLocalName());
+            System.err.println("│  Using local authentication");
+            System.err.println("└──────────────────────────────────────────────────");
             securityManager.registerSecureAgent(getLocalName(), "main", "Main-Container");
-        } else {
-            System.out.println("✅ Authenticated as: " + securityContext.agentName);
-            System.out.println("   Organization: " + securityContext.companyId);
-            System.out.println("   Security Level: " + securityContext.level);
         }
         
         // STEP 2: Initialize federation components
@@ -56,29 +52,12 @@ public class FederationAgentManager extends Agent {
         federatedDirectory = new FederatedDirectoryService();
         workflowOrchestrator = new FederationWorkflowOrchestrator();
         healthMonitor = new FederationHealthMonitor(fapProtocol);
-        
-        // STEP 3: Initialize policy manager
         policyManager = new FederationPolicyManager(this);
-        System.out.println("🛡️ Federation Policy Manager initialized");
         
         // Register FAM itself with DF
         registerWithDirectoryFacilitator();
         
-        System.out.println("📋 FAM Services:");
-        System.out.println("   • FAP-ALLOC: Federation address allocation");
-        System.out.println("   • FAP-RESOLVE: Address resolution (FFA → AID)");
-        System.out.println("   • FAP-UPDATE: Lease renewal and management");
-        System.out.println("   • SERVICE-SEARCH: Enhanced FFA-based service discovery");
-        System.out.println("   • SERVICE-REGISTER: Federated service registration");
-        System.out.println("   • SECURITY-STATUS: Security policy monitoring");
-        System.out.println("   • WORKFLOW-INIT: Federation workflow orchestration");
-        System.out.println("   • WORKFLOW-STATUS: Workflow monitoring and status");
-        System.out.println("   • HEALTH-METRICS: Federation health monitoring");
-        // NEW: Add policy services
-        System.out.println("   • POLICY-CHECK: Federation policy validation");
-        System.out.println("   • POLICY-AUDIT: Policy compliance auditing");
-        System.out.println("   • Automatic lease cleanup (60s intervals)");
-        System.out.println("🎯 FAM ready to serve enhanced federation services with policy enforcement");
+        System.out.println("✅ " + getLocalName() + " ready (Federation & Policy enforcement active)");
         
         addBehaviour(new CyclicBehaviour(this) {
             @Override
@@ -96,7 +75,12 @@ public class FederationAgentManager extends Agent {
                 boolean messageAllowed = securityManager.validateMessageWithOPA(msg, senderName, authenticatedName);
                 
                 if (!messageAllowed) {
-                    System.out.println("🚫 FAM blocked message from " + senderName + " (OPA policy denied)");
+                    System.out.println("┌─ MESSAGE BLOCKED ─────────────────────────────────");
+                    System.out.println("│  🚫 OPA Policy Violation");
+                    System.out.println("│  From:     " + senderName);
+                    System.out.println("│  To:       " + getLocalName());
+                    System.out.println("│  Protocol: " + ACLMessage.getPerformative(msg.getPerformative()));
+                    System.out.println("└──────────────────────────────────────────────────");
                     sendPolicyViolation(msg, "OPA policy denies this communication");
                     return;
                 }
@@ -106,38 +90,34 @@ public class FederationAgentManager extends Agent {
                     policyManager.checkContainerCommunicationPolicy(msg.getSender(), getAID());
                 
                 if (!commPolicy.allowed) {
-                    System.out.println("🚫 FAM blocked communication from " + senderName + ": " + commPolicy.reason);
+                    System.out.println("┌─ MESSAGE BLOCKED ─────────────────────────────────");
+                    System.out.println("│  🚫 Container Policy Violation");
+                    System.out.println("│  From:   " + senderName);
+                    System.out.println("│  To:     " + getLocalName());
+                    System.out.println("│  Reason: " + commPolicy.reason);
+                    System.out.println("└──────────────────────────────────────────────────");
                     sendPolicyViolation(msg, commPolicy.reason);
                     return;
                 }
                 
                 if (msg.getPerformative() == ACLMessage.REQUEST && c != null) {
                     if (c.contains("(AssignFFA") || c.contains("(action (AssignFFA")) {
-                        System.out.println("📥 FAM received FAP-ALLOC request from " + senderName);
                         handleAlloc(msg);
                     } else if (c.contains("(ResolveFFA")) {
-                        System.out.println("📥 FAM received FAP-RESOLVE request from " + senderName);
                         handleResolve(msg);
                     } else if (c.contains("(UpdateFFA")) {
-                        System.out.println("📥 FAM received FAP-UPDATE request from " + senderName);
                         handleUpdate(msg);
                     } else if (c.contains("(SearchServices")) {
-                        System.out.println("📥 FAM received SERVICE-SEARCH request from " + senderName);
                         handleServiceSearch(msg);
                     } else if (c.contains("(RegisterService")) {
-                        System.out.println("📥 FAM received SERVICE-REGISTER request from " + senderName);
                         handleServiceRegistration(msg);
                     } else if (c.contains("(GetSecurityStatus")) {
-                        System.out.println("📥 FAM received SECURITY-STATUS request from " + senderName);
                         handleSecurityStatus(msg);
                     } else if (c.contains("(InitializeWorkflow")) {
-                        System.out.println("📥 FAM received WORKFLOW-INIT request from " + senderName);
                         handleWorkflowInitialization(msg);
                     } else if (c.contains("(GetWorkflowStatus")) {
-                        System.out.println("📥 FAM received WORKFLOW-STATUS request from " + senderName);
                         handleWorkflowStatus(msg);
                     } else if (c.contains("(GetHealthMetrics")) {
-                        System.out.println("📥 FAM received HEALTH-METRICS request from " + senderName);
                         handleHealthMetrics(msg);
                     } else if (c.contains("(CheckPolicy")) {
                         System.out.println("📥 FAM received POLICY-CHECK request from " + senderName);
@@ -190,11 +170,6 @@ public class FederationAgentManager extends Agent {
         String cap = SL.ex(req.getContent(), ":capability \"", "\"");
         String qos = SL.ex(req.getContent(), ":qos \"", "\"");
         
-        System.out.println("📋 Allocation parameters:");
-        System.out.println("   GEO: " + geo + " | DOMAIN: " + dom + " | LEVEL: " + level);
-        System.out.println("   SYSTEM: " + sys + " | COMPONENT: " + comp);
-        System.out.println("   CAPABILITY: " + cap + " | QOS: " + qos);
-        
         FAPProtocol.FAPResponse response = fapProtocol.allocateAddress(req.getSender(), geo, dom, level, sys, comp, cap, qos);
         
         ACLMessage inf = req.createReply();
@@ -203,12 +178,16 @@ public class FederationAgentManager extends Agent {
         if (response.result == FAPProtocol.FAPResult.SUCCESS) {
             inf.setPerformative(ACLMessage.INFORM);
             inf.setContent("(Assigned-FFA :ffa \"" + response.getFfa() + "\" :policy-applied \"" + String.join(",", policy.appliedPolicies) + "\")");
-            System.out.println("✅ FAM allocated FFA for " + senderName + ": " + response.getFfa() + " (Policy: " + policy.reason + ")");
-            System.out.println("📊 Total active addresses: " + fapProtocol.getStatistics().get("activeRecords"));
+            System.out.println("┌─ FFA ALLOCATION ──────────────────────────────────");
+            System.out.println("│  ✅ SUCCESS");
+            System.out.println("│  Agent: " + senderName);
+            System.out.println("│  FFA:   " + response.getFfa());
+            System.out.println("│  Total: " + fapProtocol.getStatistics().get("activeRecords") + " active addresses");
+            System.out.println("└──────────────────────────────────────────────────");
         } else {
             inf.setPerformative(ACLMessage.FAILURE);
             inf.setContent("(Failure :reason \"" + response.getMessage() + "\")");
-            System.out.println("❌ FAM allocation failed for " + senderName + ": " + response.getMessage());
+            System.err.println("❌ FFA allocation failed for " + senderName + ": " + response.getMessage());
         }
         send(inf);
     }
@@ -392,16 +371,6 @@ public class FederationAgentManager extends Agent {
      */
     private void handleWorkflowInitialization(ACLMessage req) {
         String workflowType = SL.ex(req.getContent(), ":type \"", "\"");
-        String geoParam = SL.ex(req.getContent(), ":geo \"", "\"");
-        String domainParam = SL.ex(req.getContent(), ":domain \"", "\"");
-        String capabilityParam = SL.ex(req.getContent(), ":capability \"", "\"");
-        
-        System.out.println("🚀 FAM initializing workflow:");
-        System.out.println("   Type: " + workflowType);
-        System.out.println("   Geo: " + geoParam);
-        System.out.println("   Domain: " + domainParam);
-        System.out.println("   Capability: " + capabilityParam);
-        
         try {
             // Parse workflow type with fallback
             FederationWorkflowOrchestrator.WorkflowType type;
@@ -409,27 +378,17 @@ public class FederationAgentManager extends Agent {
                 type = FederationWorkflowOrchestrator.WorkflowType.valueOf(
                     workflowType.toUpperCase().replace("-", "_"));
             } catch (IllegalArgumentException e) {
-                // Fallback to default if type not recognized
-                System.out.println("⚠️ Unknown workflow type: " + workflowType + ", using SIMPLE_FEDERATION");
                 type = FederationWorkflowOrchestrator.WorkflowType.SIMPLE_FEDERATION;
             }
             
-            // Set up workflow parameters
-            java.util.Map<String, Object> parameters = new java.util.HashMap<>();
-            if (geoParam != null && !geoParam.isEmpty()) parameters.put("geo", geoParam);
-            if (domainParam != null && !domainParam.isEmpty()) parameters.put("domain", domainParam);
-            if (capabilityParam != null && !capabilityParam.isEmpty()) parameters.put("capability", capabilityParam);
-            
             // Initialize workflow
-            String workflowId = workflowOrchestrator.initializeFederationWorkflow(this, type, parameters);
+            String workflowId = workflowOrchestrator.startWorkflow(getAID(), type);
             
             ACLMessage reply = req.createReply();
             ACLUtil.commonHeaders(reply, "fipa-request", req.getConversationId());
             reply.setPerformative(ACLMessage.INFORM);
             reply.setContent("(WorkflowInitialized :id \"" + workflowId + "\" :type \"" + type.name() + "\")");
             send(reply);
-            
-            System.out.println("✅ FAM initialized workflow: " + workflowId);
         } catch (Exception e) {
             ACLMessage reply = req.createReply();
             ACLUtil.commonHeaders(reply, "fipa-request", req.getConversationId());
@@ -461,9 +420,8 @@ public class FederationAgentManager extends Agent {
             reply.setContent("(WorkflowStatus " +
                 ":id \"" + workflow.workflowId + "\" " +
                 ":state \"" + workflow.state + "\" " +
-                ":completed-steps " + workflow.completedSteps.size() + " " +
-                ":pending-steps " + workflow.pendingSteps.size() + " " +
-                ":errors " + workflow.errorLog.size() + ")");
+                ":ffa \"" + (workflow.allocatedFFA != null ? workflow.allocatedFFA : "none") + "\" " +
+                ":error \"" + (workflow.errorMessage != null ? workflow.errorMessage : "none") + "\")");
             System.out.println("✅ FAM returned workflow status for: " + workflowId);
         } else {
             reply.setPerformative(ACLMessage.FAILURE);

@@ -32,19 +32,12 @@ public class FederationHelper {
      */
     public static String requestFFAAllocation(Agent agent, String agentType, int instanceId, String capability) {
         try {
-            System.out.println("[FederationHelper] Requesting FFA for " + agent.getLocalName());
-            System.out.println("[FederationHelper]   Component: " + agentType);
-            System.out.println("[FederationHelper]   ID: " + instanceId);
-            System.out.println("[FederationHelper]   Capability: " + capability);
-            
             // Find Federation Address Manager Agent
             AID famAgent = findFederationAddressManager(agent);
             if (famAgent == null) {
-                System.err.println("[" + agent.getLocalName() + "] Federation Address Manager not found");
+                System.err.println("⚠️ Federation Address Manager not found");
                 return null;
             }
-            
-            System.out.println("[FederationHelper] Found FAM: " + famAgent.getLocalName());
             
             // Create FAP-ALLOC request
             ACLMessage request = new ACLMessage(ACLMessage.REQUEST);
@@ -67,37 +60,29 @@ public class FederationHelper {
             
             request.setContent(content);
             
-            System.out.println("[FederationHelper] Sending allocation request:");
-            System.out.println("[FederationHelper]   Content: " + content);
-            
-            // Send request
+            // Send request and wait for response
             agent.send(request);
-            
-            // Wait for response with longer timeout
-            System.out.println("[FederationHelper] Waiting for FAM response (timeout: 10s)...");
             ACLMessage response = agent.blockingReceive(
                 jade.lang.acl.MessageTemplate.MatchConversationId(request.getConversationId()),
                 10000  // 10 second timeout
             );
             
             if (response != null) {
-                System.out.println("[FederationHelper] Received response from FAM");
-                System.out.println("[FederationHelper]   Performative: " + ACLMessage.getPerformative(response.getPerformative()));
-                System.out.println("[FederationHelper]   Content: " + response.getContent());
-                
                 if (response.getPerformative() == ACLMessage.INFORM) {
                     // Extract FFA from response
                     String ffa = SL.ex(response.getContent(), ":ffa \"", "\"");
                     
                     if (ffa != null && !ffa.isEmpty()) {
-                        System.out.println("[FederationHelper] ✅ Allocated FFA: " + ffa);
+                        System.out.println("┌─ FFA ALLOCATED ───────────────────────────────────");
+                        System.out.println("│  Agent: " + agent.getLocalName());
+                        System.out.println("│  FFA:   " + ffa);
+                        System.out.println("└──────────────────────────────────────────────────");
                         return ffa;
                     } else {
-                        System.err.println("[FederationHelper] ❌ Response contained no FFA value");
-                        System.err.println("[FederationHelper]    Full content: " + response.getContent());
+                        System.err.println("❌ FFA allocation failed - no FFA in response");
                     }
                 } else if (response.getPerformative() == ACLMessage.FAILURE) {
-                    System.err.println("[FederationHelper] ❌ FAM returned FAILURE: " + response.getContent());
+                    System.err.println("❌ FFA allocation failed: " + response.getContent());
                 } else if (response.getPerformative() == ACLMessage.REFUSE) {
                     System.err.println("[FederationHelper] ❌ FAM REFUSED allocation request");
                     System.err.println("[FederationHelper]    Reason: " + response.getContent());
@@ -203,12 +188,10 @@ public class FederationHelper {
             DFAgentDescription[] results = DFService.search(agent, template);
             
             if (results.length > 0) {
-                System.out.println("[FederationHelper] Found FAM via DF: " + results[0].getName().getLocalName());
                 return results[0].getName();
             }
             
             // Fallback to known name
-            System.out.println("[FederationHelper] FAM not found in DF, using fallback name");
             return new AID("FederationAddressManager", AID.ISLOCALNAME);
             
         } catch (FIPAException e) {

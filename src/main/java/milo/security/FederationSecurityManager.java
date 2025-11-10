@@ -86,6 +86,8 @@ public class FederationSecurityManager {
      * Private constructor for singleton pattern
      */
     private FederationSecurityManager() {
+        System.out.println("┌─ SECURITY SYSTEM INITIALIZATION ─────────────────");
+        
         validator = new SecurityValidator();
         config = new SecurityConfiguration();
         
@@ -93,22 +95,25 @@ public class FederationSecurityManager {
         opaClient = new OPAClient();
         opaEnabled = opaClient.isAvailable();
         if (opaEnabled) {
-            System.out.println("🔐 OPA (Open Policy Agent) integration: ✅ ENABLED");
+            System.out.println("│  ✓ OPA (Policy Agent): ENABLED");
         } else {
-            System.out.println("⚠️ OPA (Open Policy Agent) integration: ❌ DISABLED (service not available)");
+            System.out.println("│  ⚠ OPA (Policy Agent): DISABLED");
         }
         
         // Initialize Keycloak client
         keycloakClient = new KeycloakClient();
         keycloakEnabled = keycloakClient.isAvailable();
         if (keycloakEnabled) {
-            System.out.println("🔐 Keycloak IAM integration: ✅ ENABLED");
+            System.out.println("│  ✓ Keycloak IAM: ENABLED");
         } else {
-            System.out.println("⚠️ Keycloak IAM integration: ❌ DISABLED (service not available)");
+            System.out.println("│  ⚠ Keycloak IAM: DISABLED");
         }
         
         initializeCompanyPolicies();
-        System.out.println("🔐 FederationSecurityManager initialized with modular components");
+        System.out.println("│  ✓ Company policies loaded");
+        System.out.println("│");
+        System.out.println("│  ✅ Security Manager Ready");
+        System.out.println("└──────────────────────────────────────────────────");
     }
     
     /**
@@ -295,15 +300,23 @@ public class FederationSecurityManager {
             logSecurityEvent("KEYCLOAK_AUTH_SUCCESS", 
                 agentName + " | org:" + attrs.org + " | role:" + attrs.role + " | trust:" + attrs.trustScore);
             
-            System.out.println("✅ Keycloak authentication successful for: " + agentName);
-            System.out.println("   Org: " + attrs.org + ", Role: " + attrs.role + 
-                             ", Trust Score: " + attrs.trustScore + ", Level: " + level);
+            System.out.println("┌─ SECURITY CONTEXT CREATED ───────────────────────");
+            System.out.println("│  Agent:         " + agentName);
+            System.out.println("│  Organization:  " + attrs.org);
+            System.out.println("│  Role:          " + attrs.role);
+            System.out.println("│  Trust Score:   " + attrs.trustScore);
+            System.out.println("│  Security Level: " + level);
+            System.out.println("└──────────────────────────────────────────────────");
             
             return context;
             
         } catch (Exception e) {
             logSecurityEvent("KEYCLOAK_AUTH_ERROR", agentName + " - " + e.getMessage());
-            System.err.println("❌ Error during Keycloak authentication: " + e.getMessage());
+            System.err.println("┌─ SECURITY CONTEXT CREATION ──────────────────────");
+            System.err.println("│  ❌ FAILED");
+            System.err.println("│  Agent: " + agentName);
+            System.err.println("│  Error: " + e.getMessage());
+            System.err.println("└──────────────────────────────────────────────────");
             return null;
         }
     }
@@ -357,7 +370,6 @@ public class FederationSecurityManager {
                 logSecurityEvent("OPA_ALLOWED", sourceAgent + " -> " + targetAgent);
             }
             
-            // Return OPA decision (overrides local validation)
             return decision.allowed;
             
         } catch (Exception e) {
