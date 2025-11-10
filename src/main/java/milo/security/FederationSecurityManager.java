@@ -353,12 +353,17 @@ public class FederationSecurityManager {
      * @return true if OPA allows the communication
      */
     public boolean validateMessageWithOPA(ACLMessage message, String sourceAgent, String targetAgent) {
-        // First do local validation
-        boolean localValidation = validateMessage(message, sourceAgent, targetAgent);
-        
-        // If OPA is not enabled, return local validation result
+        // If OPA is not enabled, use local validation only
         if (!opaEnabled) {
-            return localValidation;
+            return validateMessage(message, sourceAgent, targetAgent);
+        }
+        
+        // When OPA is enabled, skip local cross-company checks - let OPA be authoritative
+        // Only do basic message content validation
+        SecurityValidator.ValidationResult messageResult = validator.validateMessage(message);
+        if (!messageResult.allowed) {
+            logSecurityEvent("MSG_BLOCKED", sourceAgent + " -> " + targetAgent + " (" + messageResult.reason + ")");
+            return false;
         }
         
         try {
@@ -368,7 +373,7 @@ public class FederationSecurityManager {
             
             if (sourceContext == null || targetContext == null) {
                 System.err.println("⚠️ Missing security context for OPA evaluation");
-                return localValidation; // Fallback to local validation
+                return false; // Deny if context is missing
             }
             
             // Get user attributes from Keycloak token if available
@@ -407,7 +412,7 @@ public class FederationSecurityManager {
         } catch (Exception e) {
             logSecurityEvent("OPA_ERROR", sourceAgent + " -> " + targetAgent + " - " + e.getMessage());
             System.err.println("❌ Error during OPA policy evaluation: " + e.getMessage());
-            return localValidation; // Fallback to local validation on error
+            return false; // Fail secure on error
         }
     }
     
