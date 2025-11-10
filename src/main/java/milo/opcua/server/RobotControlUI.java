@@ -13,6 +13,8 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Template-configurable Robot Control UI
@@ -64,6 +66,9 @@ public class RobotControlUI extends JFrame {
     private JPanel robotPanel;
     private JPanel conveyorPanel;
     private CustomNamespace namespace;
+
+    private static final Logger logger = Logger.getLogger(RobotControlUI.class.getName());
+
 
     public RobotControlUI(OpcUaClient client, CustomNamespace namespace) {
         this.client = client;
@@ -468,6 +473,13 @@ public class RobotControlUI extends JFrame {
         return val != null ? (boolean) val : false;
     }
 
+    /**
+     * Read integer value from OPC UA server
+     * @param nodeId
+     * @return
+     * @throws ExecutionException
+     * @throws InterruptedException
+     */
     private int readIntValue(String nodeId) throws ExecutionException, InterruptedException {
         try {
             NodeId node = new NodeId(2, nodeId);
@@ -475,7 +487,9 @@ public class RobotControlUI extends JFrame {
             Object val = value.getValue().getValue();
             int result = val != null ? ((Number) val).intValue() : 0;
             if (nodeId.contains("Quantity")) {
-                System.out.println("Read " + nodeId + " = " + result);
+                // or with more context:
+                logger.log(Level.FINE, "Read nodeId={0} value={1} type={2} thread={3}",
+                    new Object[]{nodeId, result, val != null ? val.getClass().getSimpleName() : "null", Thread.currentThread().getName()});
             }
             return result;
         } catch (Exception e) {

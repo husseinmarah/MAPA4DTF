@@ -147,7 +147,7 @@ public class ConveyorAgent extends Agent {
         // This method can be extended to add conveyor-specific logic
         // For now, it maintains the same logic as the original implementation
         if (getProduced()) {
-            System.out.println("Conveyor " + conveyorId + " is currently producing");
+            // System.out.println("Conveyor " + conveyorId + " is currently producing");
             
             // If federation is enabled, broadcast production status
             if (federationEnabled) {
@@ -595,7 +595,17 @@ public class ConveyorAgent extends Agent {
                     ":production-state \"" + currentStatus + "\")"
                 );
                 
-                send(heartbeat);
+                // SECURITY: Validate outgoing heartbeat with OPA policy
+                String senderName = getLocalName();
+                String receiverName = productionManager.getLocalName();
+                boolean messageAllowed = securityManager.validateMessageWithOPA(heartbeat, senderName, receiverName);
+                
+                if (messageAllowed) {
+                    send(heartbeat);
+                } else {
+                    // Silently skip - blocked agents shouldn't send heartbeats
+                    // System.out.println("🚫 " + getLocalName() + " heartbeat blocked by policy");
+                }
                 
             }
         } catch (Exception e) {

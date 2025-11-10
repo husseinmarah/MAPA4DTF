@@ -239,14 +239,16 @@ public class RobotAgent extends Agent {
     TickerBehaviour robotBehavior = new TickerBehaviour(this, AGENT_INTERVAL) {
         @Override
         public void onTick() {
-            // 1. Display robot status
-            displayRobotStatus();
 
-            // 2. Handle conveyor production
+            // 1. Handle conveyor production
             handleConveyorProduction();
 
-            // 3. Handle robot pickup and delivery
+            // 2. Handle robot pickup and delivery
             handleRobotOperations();
+
+            // 3. Display robot status
+           // displayRobotStatus();
+
         }
     };
 
@@ -868,10 +870,24 @@ public class RobotAgent extends Agent {
                     ":status \"" + currentStatus + "\" " +
                     ":timestamp \"" + new java.util.Date() + "\" " +
                     ":robot-id \"" + robotId + "\" " +
-                    ":location \"" + (myRobot != null ? myRobot.getLocation() : "UNKNOWN") + "\")"
+                    ":robot-priority \"" + myRobot.getPriority() + "\" " +
+                    ":robot-battery-level \"" + myRobot.getBatteryLevel() + "\" " +
+                    ":carried-product \"" + (myRobot != null ? myRobot.getCarriedProduct() : "NULL") + "\" " +
+                    ":location \"" + (myRobot != null ? myRobot.getLocation() : "UNKNOWN") + "\" " +
+                    ":next-location \"" + (myRobot != null ? myRobot.getNextLocation() : "UNKNOWN") + "\")"
                 );
                 
-                send(heartbeat);
+                // SECURITY: Validate outgoing heartbeat with OPA policy
+                String senderName = getLocalName();
+                String receiverName = productionManager.getLocalName();
+                boolean messageAllowed = securityManager.validateMessageWithOPA(heartbeat, senderName, receiverName);
+                
+                if (messageAllowed) {
+                    send(heartbeat);
+                } else {
+                    // Silently skip - blocked agents shouldn't send heartbeats
+                    // System.out.println("🚫 " + getLocalName() + " heartbeat blocked by policy");
+                }
             }
         } catch (Exception e) {
             System.err.println("[" + getLocalName() + "] Error sending heartbeat: " + e.getMessage());
