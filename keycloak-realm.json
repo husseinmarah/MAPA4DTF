@@ -77,7 +77,8 @@
       "attributes": {
         "org": ["main"],
         "role": ["federation_manager"],
-        "trustScore": ["1.0"]
+        "trustScore": ["1.0"],
+        "status": ["active"]
       }
     },
     {
@@ -87,7 +88,8 @@
       "attributes": {
         "org": ["main"],
         "role": ["manager"],
-        "trustScore": ["0.95"]
+        "trustScore": ["0.95"],
+        "status": ["active"]
       }
     },
     {
@@ -98,7 +100,7 @@
         "org": ["Stakeholder1_RobotContainer"],
         "role": ["worker"],
         "trustScore": ["0.85"],
-        "status": ["active"]
+        "status": ["blocked"]
       }
     },
     {

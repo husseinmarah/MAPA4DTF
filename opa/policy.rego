@@ -44,20 +44,28 @@ allow if {
     input.receiver.org == "main"
 }
 
-# --- Federation Manager has global privileges (only from authorized orgs) ---
+# --- Federation Manager has global privileges (only from authorized orgs OR main) ---
 allow if {
     input.action == "send"
     input.sender.role == "federation_manager"
     input.sender.status == "active"  # Check status from Keycloak
-    authorized_stakeholders[input.sender.org]
+    # Allow federation managers from authorized stakeholders OR main container
+    any([
+        authorized_stakeholders[input.sender.org],
+        input.sender.org == "main"
+    ])
 }
 
-# --- Manager role from authorized stakeholders ---
+# --- Manager role from authorized stakeholders OR main container ---
 allow if {
     input.action == "send"
     input.sender.role == "manager"
     input.sender.status == "active"  # Check status from Keycloak
-    authorized_stakeholders[input.sender.org]
+    # Allow managers from authorized stakeholders OR main container
+    any([
+        authorized_stakeholders[input.sender.org],
+        input.sender.org == "main"
+    ])
 }
 
 # --- Helper: Check if receiver is permitted ---

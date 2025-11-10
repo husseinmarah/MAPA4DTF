@@ -103,7 +103,8 @@ public class ProductionAgentManager extends Agent {
     protected void setup() {
         // STEP 1: Authenticate with Keycloak
         securityManager = FederationSecurityManager.getInstance();
-        securityContext = securityManager.authenticateWithKeycloak("ProductionAgentManager", "production");
+        String keycloakUsername = "ProductionAgentManager"; // Keycloak user
+        securityContext = securityManager.authenticateWithKeycloak(keycloakUsername, "production");
         
         if (securityContext == null) {
             System.err.println("┌─ AUTHENTICATION FALLBACK ────────────────────────");
@@ -112,6 +113,9 @@ public class ProductionAgentManager extends Agent {
             System.err.println("│  Using local authentication");
             System.err.println("└──────────────────────────────────────────────────");
             securityManager.registerSecureAgent(getLocalName(), "main", "Main-Container");
+        } else {
+            // Link JADE agent name to Keycloak identity
+            securityManager.linkAgentToContext(getLocalName(), keycloakUsername);
         }
 
         // Initialize data structures

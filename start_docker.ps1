@@ -8,6 +8,6 @@ Write-Host "Checking Docker connection..." -ForegroundColor Cyan
 docker version
 
 Write-Host "Starting Keycloak + OPA..." -ForegroundColor Cyan
-docker compose up -d
+docker-compose down -v; docker-compose up -d
 
 Write-Host "All services started successfully!" -ForegroundColor Green

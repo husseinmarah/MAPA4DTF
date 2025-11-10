@@ -10,6 +10,7 @@ Write-Host "📋 Checking Docker status..." -ForegroundColor Yellow
 try {
     docker version | Out-Null
     Write-Host "✅ Docker is running" -ForegroundColor Green
+    docker-compose down -v
 } catch {
     Write-Host "❌ Docker is not running. Please start Docker Desktop." -ForegroundColor Red
     exit 1

@@ -412,6 +412,30 @@ public class FederationSecurityManager {
     }
     
     /**
+     * Check if agent has a valid authentication token
+     * 
+     * @param agentName Agent name
+     * @return true if agent has valid token
+     */
+    public boolean hasValidToken(String agentName) {
+        if (!keycloakEnabled) {
+            return true; // No token required if Keycloak is disabled
+        }
+        
+        KeycloakClient.AuthToken token = agentTokens.get(agentName);
+        boolean hasToken = token != null && !token.isExpired();
+        
+        // Debug logging
+        System.out.println("┌─ TOKEN VALIDATION ────────────────────────────────");
+        System.out.println("│  Agent: " + agentName);
+        System.out.println("│  Has Token: " + hasToken);
+        System.out.println("│  Available tokens: " + agentTokens.keySet());
+        System.out.println("└───────────────────────────────────────────────────");
+        
+        return hasToken;
+    }
+    
+    /**
      * Check if agent's token needs refresh and refresh if necessary
      * 
      * @param agentName Agent name

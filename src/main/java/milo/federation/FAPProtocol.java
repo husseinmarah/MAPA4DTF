@@ -167,9 +167,16 @@ public class FAPProtocol {
             }
 
             // Generate unique instance number
-            String counterKey = (system == null ? "SYS" : system) +
-                    (component == null ? "" : ("." + component));
-            int instance = instanceCounters.merge(counterKey, 1, Integer::sum);
+            // Try to extract agent number from agent name (e.g., RobotAgent3 -> 3)
+            String agentName = requesterAid.getLocalName();
+            int instance = extractAgentNumber(agentName);
+            
+            // If no number found in agent name, use global counter
+            if (instance == -1) {
+                String counterKey = (system == null ? "SYS" : system) +
+                        (component == null ? "" : ("." + component));
+                instance = instanceCounters.merge(counterKey, 1, Integer::sum);
+            }
 
             // Build FFA string
             StringBuilder ffaBuilder = new StringBuilder();
@@ -549,6 +556,39 @@ public class FAPProtocol {
             } catch (Exception e) {
                 System.err.println("Error notifying FAP event listener: " + e.getMessage());
             }
+        }
+    }
+    
+    /**
+     * Extract numeric suffix from agent name (e.g., RobotAgent3 -> 3, ConveyorAgent1 -> 1)
+     * @param agentName The agent name
+     * @return The numeric suffix, or -1 if not found
+     */
+    private int extractAgentNumber(String agentName) {
+        if (agentName == null || agentName.isEmpty()) {
+            return -1;
+        }
+        
+        // Find last sequence of digits in the name
+        String digits = "";
+        for (int i = agentName.length() - 1; i >= 0; i--) {
+            char c = agentName.charAt(i);
+            if (Character.isDigit(c)) {
+                digits = c + digits;
+            } else if (!digits.isEmpty()) {
+                // Found non-digit after digits, stop
+                break;
+            }
+        }
+        
+        if (digits.isEmpty()) {
+            return -1;
+        }
+        
+        try {
+            return Integer.parseInt(digits);
+        } catch (NumberFormatException e) {
+            return -1;
         }
     }
 

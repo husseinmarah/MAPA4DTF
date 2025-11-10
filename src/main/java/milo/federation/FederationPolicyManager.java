@@ -128,14 +128,25 @@ public class FederationPolicyManager {
      */
     public PolicyDecision checkFederationJoinPolicy(AID requestingAgent, String federationId) {
         try {
+            String agentName = requestingAgent.getLocalName();
+            
+            // Use integrated security manager (Keycloak + OPA) for authorization
+            FederationSecurityManager securityManager = FederationSecurityManager.getInstance();
+            
+            // Check if agent has valid authentication context
+            if (!securityManager.hasValidToken(agentName)) {
+                logAuditEvent("POLICY_DENIED", "Agent " + agentName + " has no valid authentication token");
+                return new PolicyDecision(false, "Agent must authenticate with Keycloak before joining federation");
+            }
+            
             // Get agent information from AMS
             AMSAgentDescription[] agents = AMSService.search(parentAgent, new AMSAgentDescription());
             String agentContainer = getAgentContainer(requestingAgent, agents);
             
-            // Apply federation access policies
+            // Apply local pattern-based policies (backwards compatibility)
             for (FederationPolicy policy : policies.values()) {
                 if (policy.type == PolicyType.FEDERATION_ACCESS && policy.isActive) {
-                    if (matchesPattern(requestingAgent.getLocalName(), policy.sourcePattern)) {
+                    if (matchesPattern(agentName, policy.sourcePattern)) {
                         PolicyDecision decision = applyPolicy(policy, requestingAgent, federationId, agentContainer);
                         if (!decision.allowed) {
                             return decision;
@@ -144,6 +155,7 @@ public class FederationPolicyManager {
                 }
             }
             
+            logAuditEvent("POLICY_ALLOWED", "Federation join approved for " + agentName);
             return new PolicyDecision(true, "Federation join approved");
             
         } catch (FIPAException e) {
