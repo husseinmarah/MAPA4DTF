@@ -169,7 +169,11 @@ public class ConveyorAgent extends Agent {
             
             if (myFFA != null) {
                 federationEnabled = true;
-                System.out.println("[" + getLocalName() + "] Federation enabled with FFA: " + myFFA);
+                System.out.println("┌─ FEDERATION ENABLED ──────────────────────────────");
+                System.out.println("│  Agent:      " + getLocalName());
+                System.out.println("│  FFA:        " + myFFA);
+                System.out.println("│  Capability: " + capability);
+                System.out.println("└───────────────────────────────────────────────────");
                 
                 // Add federation maintenance behavior
                 addBehaviour(new ConveyorFederationMaintenance());
@@ -197,11 +201,14 @@ public class ConveyorAgent extends Agent {
     private void initializeHorizontalFederation() {
         if (!federationEnabled) return;
         
-        System.out.println("[" + getLocalName() + "] Initializing horizontal federation with peer conveyors...");
-        
-        // Pattern for finding other conveyor agents
         String peerPattern = "EU/Plant7.Manufacturing.Production.OpcUA.MultiAgentSystem.Conveyor*::MaterialProduction.*";
-        System.out.println("[" + getLocalName() + "] Peer discovery pattern: " + peerPattern);
+        
+        System.out.println("┌─ HORIZONTAL FEDERATION (Peer-to-Peer) ───────────");
+        System.out.println("│  Agent:    " + getLocalName());
+        System.out.println("│  Target:   Other conveyor agents (same level)");
+        System.out.println("│  Pattern:  " + peerPattern);
+        System.out.println("│  Purpose:  Coordinate material production flow");
+        System.out.println("└───────────────────────────────────────────────────");
     }
     
     /**
@@ -210,11 +217,14 @@ public class ConveyorAgent extends Agent {
     private void initializeVerticalFederation() {
         if (!federationEnabled) return;
         
-        System.out.println("[" + getLocalName() + "] Initializing vertical federation with production control...");
-        
-        // Pattern for finding production control systems
         String controlPattern = "EU/Plant7.Manufacturing.Production.**.ProductionControl::MaterialFlow";
-        System.out.println("[" + getLocalName() + "] Control system pattern: " + controlPattern);
+        
+        System.out.println("┌─ VERTICAL FEDERATION (Hierarchical) ─────────────");
+        System.out.println("│  Agent:    " + getLocalName());
+        System.out.println("│  Target:   Production control systems");
+        System.out.println("│  Pattern:  " + controlPattern);
+        System.out.println("│  Purpose:  Receive production commands & report");
+        System.out.println("└───────────────────────────────────────────────────");
     }
     
     /**

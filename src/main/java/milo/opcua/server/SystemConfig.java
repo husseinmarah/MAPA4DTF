@@ -39,6 +39,7 @@ public class SystemConfig {
         new RobotConfig("priority", "priority", Identifiers.Int32, 1),
         new RobotConfig("carryingProduct", "carryingProduct", Identifiers.Boolean, false),
         new RobotConfig("carriedProduct", "carriedProduct", Identifiers.String, ""),
+        new RobotConfig("enabled", "enabled", Identifiers.Boolean, true),  // New: Control when robot can start
     };
     
     // =====================================================================

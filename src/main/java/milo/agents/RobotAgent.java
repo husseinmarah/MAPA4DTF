@@ -29,7 +29,7 @@ public class RobotAgent extends Agent {
     // =====================================================================
     // CONFIGURATION - Agent-specific
     // =====================================================================
-    private static final int AGENT_INTERVAL = 500; // Fixed interval
+    private static final int AGENT_INTERVAL = 5000; // Fixed interval
     private int robotId; // Specific robot this agent manages
     private RobotTemplate myRobot; // Reference to this agent's robot
 
@@ -162,7 +162,12 @@ public class RobotAgent extends Agent {
                     this, "simple-federation", "EU/Plant7", "Manufacturing", capability);
                 
                 if (workflowId != null) {
-                    System.out.println("[" + getLocalName() + "] Federation workflow started: " + workflowId);
+                    System.out.println("┌─ FEDERATION WORKFLOW INITIALIZED ────────────────");
+                    System.out.println("│  Agent:       " + getLocalName());
+                    System.out.println("│  Workflow ID: " + workflowId);
+                    System.out.println("│  Type:        simple-federation");
+                    System.out.println("│  Capability:  " + capability);
+                    System.out.println("└───────────────────────────────────────────────────");
                 }
                 
                 // Add federation-specific behaviors
@@ -206,12 +211,14 @@ public class RobotAgent extends Agent {
     private void initializeHorizontalFederation() {
         if (!federationEnabled) return;
         
-        System.out.println("[" + getLocalName() + "] Initializing horizontal federation with peer robots...");
-        
-        // Discover and connect to other robot agents at the same level
-        // Using pattern matching to find peer robots
         String peerPattern = "EU/Plant7.Manufacturing.Production.OpcUA.MultiAgentSystem.Robot*::MaterialHandling.*";
-        System.out.println("[" + getLocalName() + "] Peer discovery pattern: " + peerPattern);
+        
+        System.out.println("┌─ HORIZONTAL FEDERATION (Peer-to-Peer) ───────────");
+        System.out.println("│  Agent:    " + getLocalName());
+        System.out.println("│  Target:   Other robot agents (same level)");
+        System.out.println("│  Pattern:  " + peerPattern);
+        System.out.println("│  Purpose:  Coordination between peer robots");
+        System.out.println("└───────────────────────────────────────────────────");
         
         // This would be used for coordination between robots of the same type
         // Implementation would involve periodic peer discovery and coordination
@@ -223,11 +230,14 @@ public class RobotAgent extends Agent {
     private void initializeVerticalFederation() {
         if (!federationEnabled) return;
         
-        System.out.println("[" + getLocalName() + "] Initializing vertical federation with production manager...");
-        
-        // Connect to higher-level production management
         String managerPattern = "EU/Plant7.Manufacturing.Production.**.ProductionManager::ManufacturingCoordination";
-        System.out.println("[" + getLocalName() + "] Manager discovery pattern: " + managerPattern);
+        
+        System.out.println("┌─ VERTICAL FEDERATION (Hierarchical) ─────────────");
+        System.out.println("│  Agent:    " + getLocalName());
+        System.out.println("│  Target:   Production management layer");
+        System.out.println("│  Pattern:  " + managerPattern);
+        System.out.println("│  Purpose:  Receive high-level commands & report");
+        System.out.println("└───────────────────────────────────────────────────");
         
         // This would be used for receiving high-level production commands
         // and reporting status to management layer
@@ -239,6 +249,9 @@ public class RobotAgent extends Agent {
     TickerBehaviour robotBehavior = new TickerBehaviour(this, AGENT_INTERVAL) {
         @Override
         public void onTick() {
+
+            // 0. Check OPA authorization and update enabled status
+            updateRobotEnabledStatus();
 
             // 1. Handle conveyor production
             handleConveyorProduction();
@@ -255,13 +268,59 @@ public class RobotAgent extends Agent {
     // =====================================================================
     // ORGANIZED BEHAVIOR METHODS - Agent-specific operations
     // =====================================================================
+    
+    /**
+     * Update robot enabled status based on OPA authorization
+     * If OPA allows the robot to operate, set enabled = true
+     * Otherwise, set enabled = false
+     */
+    private void updateRobotEnabledStatus() {
+        if (myRobot == null || securityManager == null) {
+            return;
+        }
+        
+        try {
+            // Check if agent has valid token
+            if (!securityManager.hasValidToken(getLocalName())) {
+                // Token invalid or expired - disable robot
+                if (myRobot.isEnabled()) {
+                    myRobot.setEnabled(false);
+                    System.out.println("🚫 " + getLocalName() + " DISABLED - Invalid or expired token");
+                }
+                return;
+            }
+            
+            // Refresh token if needed
+            securityManager.refreshTokenIfNeeded(getLocalName());
+            
+            // Check if agent can access robot operation service
+            boolean authorized = securityManager.canAccessService(getLocalName(), "robot_operation");
+            
+            // Update the enabled status based on authorization
+            if (authorized != myRobot.isEnabled()) {
+                myRobot.setEnabled(authorized);
+                
+                if (authorized) {
+                    System.out.println("✅ " + getLocalName() + " ENABLED - OPA authorization granted");
+                } else {
+                    System.out.println("🚫 " + getLocalName() + " DISABLED - OPA authorization denied");
+                }
+            }
+            
+        } catch (Exception e) {
+            // On error, disable robot for safety
+            if (myRobot.isEnabled()) {
+                myRobot.setEnabled(false);
+                System.err.println("❌ " + getLocalName() + " DISABLED - Authorization check failed: " + e.getMessage());
+            }
+        }
+    }
+    
     private void displayRobotStatus() {
         if (myRobot != null) {
             System.out.println("Robot " + robotId + " Location: " + myRobot.getLocation() + ", Next Location: " + myRobot.getNextLocation());
         }
     }
-
-
 
     private void handleConveyorProduction() {
         checkConveyorProduction();
@@ -269,6 +328,11 @@ public class RobotAgent extends Agent {
 
     private void handleRobotOperations() {
         if (myRobot != null) {
+            // Only execute robot operations if enabled
+            if (!myRobot.isEnabled()) {
+                return; // Robot is disabled by OPA policy
+            }
+            
             // Handle product pickup for this specific robot
             checkProductPickup(myRobot);
 

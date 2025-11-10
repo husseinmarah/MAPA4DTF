@@ -226,7 +226,7 @@ public class CustomNamespace extends ManagedNamespace {
         // Return robot with all nodes using SystemConfig order
         return new RobotTemplate(
             robotNodes.get(0), robotNodes.get(1), robotNodes.get(2), robotNodes.get(3), robotNodes.get(4),
-            robotNodes.get(5), robotNodes.get(6), robotNodes.get(7)
+            robotNodes.get(5), robotNodes.get(6), robotNodes.get(7), robotNodes.get(8)
         );
     }
 

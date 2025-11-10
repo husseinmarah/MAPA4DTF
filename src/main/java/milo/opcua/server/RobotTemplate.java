@@ -13,10 +13,11 @@ public class RobotTemplate {
     private UaVariableNode priority;
     private UaVariableNode carryingProduct;
     private UaVariableNode carriedProduct;
+    private UaVariableNode enabled;
 
     public RobotTemplate(UaVariableNode location, UaVariableNode nextLocation, UaVariableNode batteryLevel,
                          UaVariableNode target, UaVariableNode stop, UaVariableNode priority,
-                         UaVariableNode carryingProduct, UaVariableNode carriedProduct) {
+                         UaVariableNode carryingProduct, UaVariableNode carriedProduct, UaVariableNode enabled) {
         this.location = location;
         this.nextLocation = nextLocation;
         this.batteryLevel = batteryLevel;
@@ -25,6 +26,7 @@ public class RobotTemplate {
         this.priority = priority;
         this.carryingProduct = carryingProduct;
         this.carriedProduct = carriedProduct;
+        this.enabled = enabled;
     }
 
     public String getLocation() {
@@ -59,6 +61,10 @@ public class RobotTemplate {
         return (String) carriedProduct.getValue().getValue().getValue();
     }
 
+    public boolean isEnabled() {
+        return (boolean) enabled.getValue().getValue().getValue();
+    }
+
     public void setLocation(String value) {
         location.setValue(new DataValue(new Variant(value)));
     }
@@ -89,5 +95,9 @@ public class RobotTemplate {
 
     public void setCarriedProduct(String value) {
         carriedProduct.setValue(new DataValue(new Variant(value)));
+    }
+
+    public void setEnabled(boolean value) {
+        enabled.setValue(new DataValue(new Variant(value)));
     }
 }

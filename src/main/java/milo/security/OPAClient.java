@@ -94,6 +94,7 @@ public class OPAClient {
                     System.err.println("│  ⚠️ SERVICE ERROR - HTTP " + response.code());
                     System.err.println("│  From: " + senderName + " (" + senderOrg + ")");
                     System.err.println("│  To:   " + receiverName + " (" + receiverOrg + ")");
+                    System.out.println("│  Time:        " + java.time.Instant.now().toString());
                     System.err.println("└──────────────────────────────────────────────────");
                     return new PolicyDecision(false, "OPA service error", null);
                 }
@@ -110,6 +111,7 @@ public class OPAClient {
                 if (allowed) {
                     System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
                     System.out.println("│  ✅ ALLOWED");
+                    System.out.println("│  Time:        " + java.time.Instant.now().toString());
                     System.out.println("│  From:        " + senderName + " (" + senderOrg + ")");
                     System.out.println("│  To:          " + receiverName + " (" + receiverOrg + ")");
                     System.out.println("│  Role:        " + senderRole);
@@ -118,6 +120,7 @@ public class OPAClient {
                 } else {
                     System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
                     System.out.println("│  ❌ DENIED");
+                    System.out.println("│  Time:        " + java.time.Instant.now().toString());
                     System.out.println("│  From:        " + senderName + " (" + senderOrg + ")");
                     System.out.println("│  To:          " + receiverName + " (" + receiverOrg + ")");
                     System.out.println("│  Role:        " + senderRole);

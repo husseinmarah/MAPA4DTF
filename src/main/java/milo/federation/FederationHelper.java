@@ -86,8 +86,6 @@ public class FederationHelper {
                 } else if (response.getPerformative() == ACLMessage.REFUSE) {
                     System.err.println("[FederationHelper] ❌ FAM REFUSED allocation request for agent: " + agent.getLocalName());
                     System.err.println("[FederationHelper]    Reason: " + response.getContent());
-                    System.err.println("[FederationHelper]    This typically means the agent failed policy validation.");
-                    System.err.println("[FederationHelper]    Check FederationPolicyManager configuration or agent naming.");
                 } else {
                     System.err.println("[FederationHelper] ❌ Unexpected performative: " + ACLMessage.getPerformative(response.getPerformative()));
                 }
@@ -451,15 +449,16 @@ public class FederationHelper {
             );
             
             if (response != null) {
-                System.out.println("[FederationHelper] Workflow response received");
-                System.out.println("[FederationHelper]   Performative: " + jade.lang.acl.ACLMessage.getPerformative(response.getPerformative()));
-                System.out.println("[FederationHelper]   Content: " + response.getContent());
-                
                 if (response.getPerformative() == ACLMessage.INFORM) {
                     String workflowId = SL.ex(response.getContent(), ":id \"", "\"");
                     
                     if (workflowId != null && !workflowId.isEmpty()) {
-                        System.out.println("[FederationHelper] ✅ Workflow initialized: " + workflowId);
+                        System.out.println("┌─ FEDERATION WORKFLOW RESPONSE ───────────────────");
+                        System.out.println("│  Status:      ✅ SUCCESS");
+                        System.out.println("│  Workflow ID: " + workflowId);
+                        System.out.println("│  Type:        " + validWorkflowType);
+                        System.out.println("│  Performative: INFORM");
+                        System.out.println("└───────────────────────────────────────────────────");
                         return workflowId;
                     } else {
                         System.err.println("[FederationHelper] ⚠️ Workflow response contained no ID");

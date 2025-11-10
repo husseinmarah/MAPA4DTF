@@ -120,16 +120,7 @@ public class IntegratedSecurityManager {
         System.out.println("   Keycloak Enabled: " + status.get("keycloak-enabled"));
         System.out.println("   Keycloak Available: " + status.get("keycloak-available"));
     }
-    
-    /**
-     * Run security system test
-     * 
-     * @return true if all tests pass
-     */
-    public boolean runSecurityTest() {
-        return securityManager.performSecurityTest();
-    }
-    
+
     /**
      * Get audit log for security review
      * 

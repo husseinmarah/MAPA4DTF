@@ -36,6 +36,7 @@ public class RobotControlUI extends JFrame {
     private JLabel[] locationLabels;
     private JLabel[] nextLocationLabels;
     private JCheckBox[] stopCheckboxes;
+    private JCheckBox[] enabledCheckboxes;
     private JLabel[] batteryLevelLabels;
     private JCheckBox[] carryingProductCheckboxes;
     private JLabel[] carriedProductLabels;
@@ -183,7 +184,7 @@ public class RobotControlUI extends JFrame {
         gbc.insets = new Insets(5, 5, 5, 5); // Insets(top, left, bottom, right)
 
         // Header Labels
-        String[] headers = {"Robot", "Location", "Next Location", "Stop", "Battery Level", "Carrying Product", "Carried Product", "Target", "Priority"};
+        String[] headers = {"Robot", "Location", "Next Location", "Stop", "Enabled", "Battery Level", "Carrying Product", "Carried Product", "Target", "Priority"};
         for (int i = 0; i < headers.length; i++) {
             gbc.gridx = i;
             gbc.gridy = 0;
@@ -196,6 +197,7 @@ public class RobotControlUI extends JFrame {
         locationLabels = new JLabel[numRobots];
         nextLocationLabels = new JLabel[numRobots];
         stopCheckboxes = new JCheckBox[numRobots];
+        enabledCheckboxes = new JCheckBox[numRobots];
         batteryLevelLabels = new JLabel[numRobots];
         carryingProductCheckboxes = new JCheckBox[numRobots];
         carriedProductLabels = new JLabel[numRobots];
@@ -229,29 +231,35 @@ public class RobotControlUI extends JFrame {
             stopCheckboxes[i] = new JCheckBox();
             robotPanel.add(stopCheckboxes[i], gbc);
 
-            // Battery Level Label
+            // Enabled Checkbox (Read-only - controlled by OPA)
             gbc.gridx = 4;
+            enabledCheckboxes[i] = new JCheckBox();
+            enabledCheckboxes[i].setEnabled(false); // Read-only - OPA controls this
+            robotPanel.add(enabledCheckboxes[i], gbc);
+
+            // Battery Level Label
+            gbc.gridx = 5;
             batteryLevelLabels[i] = new JLabel("", SwingConstants.CENTER);
             robotPanel.add(batteryLevelLabels[i], gbc);
 
             // Carrying Product Checkbox
-            gbc.gridx = 5;
+            gbc.gridx = 6;
             carryingProductCheckboxes[i] = new JCheckBox();
             carryingProductCheckboxes[i].setEnabled(false); // Read-only
             robotPanel.add(carryingProductCheckboxes[i], gbc);
 
             // Carried Product Label
-            gbc.gridx = 6;
+            gbc.gridx = 7;
             carriedProductLabels[i] = new JLabel("", SwingConstants.CENTER);
             robotPanel.add(carriedProductLabels[i], gbc);
 
             // Target TextField
-            gbc.gridx = 7;
+            gbc.gridx = 8;
             targetTextFields[i] = new JTextField(10);
             robotPanel.add(targetTextFields[i], gbc);
 
             // Priority TextField
-            gbc.gridx = 8;
+            gbc.gridx = 9;
             gbc.fill = GridBagConstraints.NONE; // Don't stretch this field
             priorityTextFields[i] = new JTextField(3);
             priorityTextFields[i].setPreferredSize(new Dimension(50, priorityTextFields[i].getPreferredSize().height));
@@ -286,7 +294,7 @@ public class RobotControlUI extends JFrame {
         // Add Product Delivery Statistics section
         gbc.gridx = 0;
         gbc.gridy = numRobots + 2;
-        gbc.gridwidth = 9; // Span across all columns
+        gbc.gridwidth = 10; // Span across all columns (updated for Enabled column)
         gbc.fill = GridBagConstraints.BOTH;
         gbc.weightx = 1.0;
         gbc.weighty = 0.3;
@@ -387,6 +395,7 @@ public class RobotControlUI extends JFrame {
                 String locationNodeId = robotNumber + "-location";
                 String nextLocationNodeId = robotNumber + "-nextLocation";
                 String stopNodeId = robotNumber + "-stop";
+                String enabledNodeId = robotNumber + "-enabled";
                 String batteryLevelNodeId = robotNumber + "-batteryLevel";
                 String carryingProductNodeId = robotNumber + "-carryingProduct";
                 String carriedProductNodeId = robotNumber + "-carriedProduct";
@@ -396,6 +405,7 @@ public class RobotControlUI extends JFrame {
                 String location = readStringValue(locationNodeId);
                 String nextLocation = readStringValue(nextLocationNodeId);
                 boolean stop = readBooleanValue(stopNodeId);
+                boolean enabled = readBooleanValue(enabledNodeId);
                 int batteryLevel = readIntValue(batteryLevelNodeId);
                 boolean carryingProduct = readBooleanValue(carryingProductNodeId);
                 String carriedProduct = readStringValue(carriedProductNodeId);
@@ -405,6 +415,7 @@ public class RobotControlUI extends JFrame {
                 locationLabels[i].setText(location);
                 nextLocationLabels[i].setText(nextLocation);
                 stopCheckboxes[i].setSelected(stop);
+                enabledCheckboxes[i].setSelected(enabled);
                 batteryLevelLabels[i].setText(batteryLevel + "%");
                 carryingProductCheckboxes[i].setSelected(carryingProduct);
                 carriedProductLabels[i].setText(carriedProduct);

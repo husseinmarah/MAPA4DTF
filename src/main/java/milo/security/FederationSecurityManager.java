@@ -177,11 +177,24 @@ public class FederationSecurityManager {
     
     /**
      * Check if an agent can access a specific service
+     * For robot operations, also validates with OPA policy
      */
     public boolean canAccessService(String agentName, String serviceName) {
         try {
             SecurityContext context = agentContexts.get(agentName);
-            Set<String> allowedServices = companyServices.get(context != null ? context.companyId : null);
+            
+            if (context == null) {
+                logSecurityEvent("ACCESS_DENIED", agentName + " -> " + serviceName + " (no security context)");
+                return false;
+            }
+            
+            // For robot operations, use OPA if available
+            if (opaEnabled && serviceName.equals("robot_operation")) {
+                return validateRobotOperationWithOPA(agentName, context);
+            }
+            
+            // For other services, use local validation
+            Set<String> allowedServices = companyServices.get(context.companyId);
             
             SecurityValidator.ValidationResult result = validator.validateServiceAccess(
                 agentName, serviceName, context, allowedServices);
@@ -196,6 +209,43 @@ public class FederationSecurityManager {
         } catch (Exception e) {
             logSecurityEvent("ACCESS_ERROR", agentName + " -> " + serviceName + " - " + e.getMessage());
             System.err.println("❌ Error validating service access: " + e.getMessage());
+            return false; // Fail secure
+        }
+    }
+    
+    /**
+     * Validate robot operation access with OPA
+     * Checks if the agent is authorized to operate a robot based on policy
+     */
+    private boolean validateRobotOperationWithOPA(String agentName, SecurityContext context) {
+        try {
+            // Get user attributes from Keycloak token
+            KeycloakClient.AuthToken token = agentTokens.get(agentName);
+            
+            if (token == null || token.isExpired()) {
+                logSecurityEvent("OPA_ROBOT_DENIED", agentName + " (no valid token)");
+                return false;
+            }
+            
+            KeycloakClient.UserAttributes attrs = token.userAttributes;
+            
+            // Evaluate robot operation policy with OPA
+            OPAClient.PolicyDecision decision = opaClient.evaluateCommunicationPolicy(
+                agentName, attrs.org, attrs.role, attrs.trustScore, attrs.status,
+                "RobotOperationService", "main", "active", "robot_operation"
+            );
+            
+            if (decision.allowed) {
+                logSecurityEvent("OPA_ROBOT_ALLOWED", agentName + " (robot operation authorized)");
+            } else {
+                logSecurityEvent("OPA_ROBOT_DENIED", agentName + " (" + decision.reason + ")");
+            }
+            
+            return decision.allowed;
+            
+        } catch (Exception e) {
+            logSecurityEvent("OPA_ROBOT_ERROR", agentName + " - " + e.getMessage());
+            System.err.println("❌ Error during OPA robot operation validation: " + e.getMessage());
             return false; // Fail secure
         }
     }
@@ -430,11 +480,16 @@ public class FederationSecurityManager {
         KeycloakClient.AuthToken token = agentTokens.get(agentName);
         boolean hasToken = token != null && !token.isExpired();
         
-        // Debug logging
+        // Debug logging - show specific agent token info
         System.out.println("┌─ TOKEN VALIDATION ────────────────────────────────");
         System.out.println("│  Agent: " + agentName);
         System.out.println("│  Has Token: " + hasToken);
-        System.out.println("│  Available tokens: " + agentTokens.keySet());
+        if (token != null) {
+            System.out.println("│  Token Expired: " + token.isExpired());
+            System.out.println("│  Token Refresh Needed: " + token.needsRefresh());
+        } else {
+            System.out.println("│  Token: null");
+        }
         System.out.println("└───────────────────────────────────────────────────");
         
         return hasToken;
@@ -510,54 +565,9 @@ public class FederationSecurityManager {
         status.put("keycloak-available", keycloakClient.isAvailable());
         return status;
     }
-    
-    /**
-     * Test the security system - for integration testing
-     */
-    public boolean performSecurityTest() {
-        try {
-            System.out.println("🧪 Running security system test...");
-            
-            // Test 1: Agent registration
-            SecurityContext testContext = registerSecureAgent("TestAgent", "TestCompany", "TestContainer");
-            if (testContext == null) {
-                System.err.println("❌ Test failed: Agent registration");
-                return false;
-            }
-            
-            // Test 2: Service access validation
-            boolean canAccess = canAccessService("TestAgent", "status");
-            if (!canAccess) {
-                System.err.println("❌ Test failed: Basic service access");
-                return false;
-            }
-            
-            // Test 3: Cross-company validation
-            SecurityContext otherContext = new SecurityContext("OtherAgent", "OtherCompany", "OtherContainer", SecurityLevel.TRUSTED);
-            agentContexts.put("OtherAgent", otherContext);
-            
-            SecurityValidator.ValidationResult crossResult = validator.validateCrossCommunication(testContext, otherContext);
-            // This should succeed for TRUSTED level agents
-            
-            // Test 4: Check service status
-            Map<String, Boolean> serviceStatus = getServiceStatus();
-            System.out.println("🔍 Service Status: " + serviceStatus);
-            
-            // Cleanup test data
-            agentContexts.remove("TestAgent");
-            agentContexts.remove("OtherAgent");
-            
-            System.out.println("✅ Security system test completed successfully");
-            return true;
-            
-        } catch (Exception e) {
-            System.err.println("❌ Security test failed: " + e.getMessage());
-            return false;
-        }
-    }
-    
+
     // ========== Private Helper Methods ==========
-    
+
     /**
      * Initialize default company policies
      */
