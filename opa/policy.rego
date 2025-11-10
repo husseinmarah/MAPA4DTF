@@ -2,22 +2,30 @@ package authz
 
 default allow := false
 
-# Check 1: Is sender from authorized stakeholder?
 # --- Authorized stakeholders (Stakeholder2 is BLOCKED) ---
 authorized_stakeholders := {"Stakeholder1_RobotContainer", "Stakeholder3_ConveyorContainer"}
 
-# --- Block all communication from Stakeholder2_RobotContainer ---
+# --- Blocked stakeholders (explicit deny list) ---
+blocked_stakeholders := {"Stakeholder2_RobotContainer"}
+
+# --- PRIORITY RULE: Block all communication from blocked stakeholders ---
+# This rule ensures blocked stakeholders are denied before any allow rules
 allow if {
-    input.sender.org == "Stakeholder2_RobotContainer"
-    false  # Explicitly deny
+    blocked_stakeholders[input.sender.org]
+    false  # Explicitly deny - this rule will never allow
 }
 
-# Check 2: Is role "worker"?
+allow if {
+    blocked_stakeholders[input.receiver.org]
+    false  # Also block communication TO blocked stakeholders
+}
+
 # --- Allow: worker role from authorized stakeholders ---
 allow if {
     input.action == "send"
     input.sender.role == "worker"
     authorized_stakeholders[input.sender.org]
+    not blocked_stakeholders[input.sender.org]  # Extra safety check
     is_permitted_for_receiver(input.sender, input.receiver)
 }
 
@@ -26,6 +34,7 @@ allow if {
     input.action == "send"
     input.sender.trustScore >= 0.8
     authorized_stakeholders[input.sender.org]
+    not blocked_stakeholders[input.sender.org]
     input.receiver.org == "main"
 }
 
@@ -34,6 +43,7 @@ allow if {
     input.action == "send"
     input.sender.role == "federation_manager"
     authorized_stakeholders[input.sender.org]
+    not blocked_stakeholders[input.sender.org]
 }
 
 # --- Manager role from authorized stakeholders ---
@@ -41,13 +51,14 @@ allow if {
     input.action == "send"
     input.sender.role == "manager"
     authorized_stakeholders[input.sender.org]
+    not blocked_stakeholders[input.sender.org]
 }
 
-# Check 3: Can worker communicate with main?
-# --- Main container can communicate with authorized stakeholder containers only ---
+# --- Helper: Check if receiver is permitted ---
 is_permitted_for_receiver(sender, receiver) if {
     receiver.org == "main"
     authorized_stakeholders[sender.org]
+    not blocked_stakeholders[sender.org]
     sender.trustScore >= 0.8
 }
 
@@ -55,6 +66,7 @@ is_permitted_for_receiver(sender, receiver) if {
 is_permitted_for_receiver(sender, receiver) if {
     sender.org == "main"
     authorized_stakeholders[receiver.org]
+    not blocked_stakeholders[receiver.org]
     valid_roles := {"manager", "federation_manager"}
     valid_roles[sender.role]
 }
@@ -64,6 +76,7 @@ is_permitted_for_receiver(sender, receiver) if {
     receiver.org != "main"
     sender.org == receiver.org
     authorized_stakeholders[sender.org]
+    not blocked_stakeholders[sender.org]
     valid_worker_roles := {"worker"}
     valid_worker_roles[sender.role]
 }

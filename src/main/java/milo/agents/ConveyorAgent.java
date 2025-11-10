@@ -65,17 +65,47 @@ public class ConveyorAgent extends Agent {
             }
         }
         
-        // STEP 1: Authenticate with Keycloak
+        // STEP 1: Detect container and authenticate with Keycloak
+        String containerName = "unknown";
+        try {
+            containerName = getContainerController().getContainerName();
+            System.out.println("┌─ CONTAINER DETECTION ─────────────────────────────");
+            System.out.println("│  Agent: " + getLocalName());
+            System.out.println("│  Detected Container: " + containerName);
+            System.out.println("└───────────────────────────────────────────────────");
+        } catch (Exception e) {
+            System.err.println("⚠️ Could not detect container name: " + e.getMessage());
+        }
+        
+        String keycloakUsername = "ConveyorAgent_Stakeholder3";
+        String keycloakPassword = "conveyor";
+        String organization = "Stakeholder3_ConveyorContainer";
+        
+        // Verify we're in the correct container
+        if (!containerName.equals("Stakeholder3_ConveyorContainer") && !containerName.equals("Main-Container")) {
+            System.err.println("⚠️ ConveyorAgent running in unexpected container: " + containerName);
+        }
+        
+        System.out.println("┌─ AUTHENTICATION MAPPING ──────────────────────────");
+        System.out.println("│  Container: " + containerName);
+        System.out.println("│  Keycloak User: " + keycloakUsername);
+        System.out.println("│  Organization: " + organization);
+        System.out.println("└───────────────────────────────────────────────────");
+        
         securityManager = FederationSecurityManager.getInstance();
-        securityContext = securityManager.authenticateWithKeycloak("ConveyorAgent", "conveyor");
+        securityContext = securityManager.authenticateWithKeycloak(keycloakUsername, keycloakPassword);
         
         if (securityContext == null) {
             System.err.println("┌─ AUTHENTICATION FALLBACK ────────────────────────");
             System.err.println("│  ⚠️ Keycloak authentication failed");
             System.err.println("│  Agent: " + getLocalName());
+            System.err.println("│  User: " + keycloakUsername);
             System.err.println("│  Using local authentication");
             System.err.println("└──────────────────────────────────────────────────");
-            securityManager.registerSecureAgent(getLocalName(), "Stakeholder3_ConveyorContainer", "Main-Container");
+            securityManager.registerSecureAgent(getLocalName(), organization, containerName);
+        } else {
+            // Link the agent's local name to the authenticated context
+            securityManager.linkAgentToContext(getLocalName(), keycloakUsername);
         }
         
         // Add small delay to ensure ProductionAgentManager is ready

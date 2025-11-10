@@ -153,6 +153,29 @@ public class FederationSecurityManager {
     }
     
     /**
+     * Link an agent's local name to an existing authenticated context
+     * This is used when the agent's local name differs from the Keycloak username
+     * 
+     * @param localName The agent's actual local name (e.g., "RobotAgent1")
+     * @param authenticatedName The Keycloak username (e.g., "RobotAgent")
+     * @return true if linking was successful
+     */
+    public boolean linkAgentToContext(String localName, String authenticatedName) {
+        SecurityContext context = agentContexts.get(authenticatedName);
+        if (context != null) {
+            // Register the local name with the same context
+            agentContexts.put(localName, context);
+            // Also link the token
+            KeycloakClient.AuthToken token = agentTokens.get(authenticatedName);
+            if (token != null) {
+                agentTokens.put(localName, token);
+            }
+            return true;
+        }
+        return false;
+    }
+    
+    /**
      * Check if an agent can access a specific service
      */
     public boolean canAccessService(String agentName, String serviceName) {

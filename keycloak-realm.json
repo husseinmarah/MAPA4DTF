@@ -77,7 +77,7 @@
       }
     },
     {
-      "username": "RobotAgent",
+      "username": "RobotAgent_Stakeholder1",
       "enabled": true,
       "credentials": [{ "type": "password", "value": "robot", "temporary": false }],
       "attributes": {
@@ -87,7 +87,17 @@
       }
     },
     {
-      "username": "ConveyorAgent",
+      "username": "RobotAgent_Stakeholder2",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "robot", "temporary": false }],
+      "attributes": {
+        "org": ["Stakeholder2_RobotContainer"],
+        "role": ["worker"],
+        "trustScore": ["0.9"]
+      }
+    },
+    {
+      "username": "ConveyorAgent_Stakeholder3",
       "enabled": true,
       "credentials": [{ "type": "password", "value": "conveyor", "temporary": false }],
       "attributes": {

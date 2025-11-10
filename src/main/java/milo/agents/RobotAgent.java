@@ -66,17 +66,62 @@ public class RobotAgent extends Agent {
             }
         }
         
-        // STEP 1: Authenticate with Keycloak
+        // STEP 1: Detect exact container and authenticate with Keycloak
+        String containerName = "unknown";
+        try {
+            containerName = getContainerController().getContainerName();
+            System.out.println("┌─ CONTAINER DETECTION ─────────────────────────────");
+            System.out.println("│  Agent: " + getLocalName());
+            System.out.println("│  Detected Container: " + containerName);
+            System.out.println("└───────────────────────────────────────────────────");
+        } catch (Exception e) {
+            System.err.println("⚠️ Could not detect container name: " + e.getMessage());
+        }
+        
+        String keycloakUsername;
+        String keycloakPassword;
+        String organization;
+        
+        // Map exact container name to Keycloak credentials
+        if (containerName.equals("Stakeholder1_RobotContainer")) {
+            keycloakUsername = "RobotAgent_Stakeholder1";
+            keycloakPassword = "robot";
+            organization = "Stakeholder1_RobotContainer";
+        } else if (containerName.equals("Stakeholder2_RobotContainer")) {
+            keycloakUsername = "RobotAgent_Stakeholder2";
+            keycloakPassword = "robot";
+            organization = "Stakeholder2_RobotContainer";
+        } else {
+            // Fallback: default to Stakeholder1
+                        System.out.println(""
+                    + "┌─ AUTHENTICATION FALLBACK ────────────────────────\n"
+                    + "│  ⚠️ Unknown container: " + containerName + "\n"
+                    + "└──────────────────────────────────────────────────");
+            keycloakUsername = "RobotAgent_Stakeholder1";
+            keycloakPassword = "robot";
+            organization = "Stakeholder1_RobotContainer";
+        }
+        
+        System.out.println("┌─ AUTHENTICATION MAPPING ──────────────────────────");
+        System.out.println("│  Container: " + containerName);
+        System.out.println("│  Keycloak User: " + keycloakUsername);
+        System.out.println("│  Organization: " + organization);
+        System.out.println("└───────────────────────────────────────────────────");
+        
         securityManager = FederationSecurityManager.getInstance();
-        securityContext = securityManager.authenticateWithKeycloak("RobotAgent", "robot");
+        securityContext = securityManager.authenticateWithKeycloak(keycloakUsername, keycloakPassword);
         
         if (securityContext == null) {
             System.err.println("┌─ AUTHENTICATION FALLBACK ────────────────────────");
             System.err.println("│  ⚠️ Keycloak authentication failed");
             System.err.println("│  Agent: " + getLocalName());
+            System.err.println("│  User: " + keycloakUsername);
             System.err.println("│  Using local authentication");
             System.err.println("└──────────────────────────────────────────────────");
-            securityManager.registerSecureAgent(getLocalName(), "Stakeholder1_RobotContainer", "Main-Container");
+            securityManager.registerSecureAgent(getLocalName(), organization, containerName);
+        } else {
+            // Link the agent's local name to the authenticated context
+            securityManager.linkAgentToContext(getLocalName(), keycloakUsername);
         }
         
         // Add small delay to ensure ProductionAgentManager is ready

@@ -84,7 +84,7 @@ public class FederationHelper {
                 } else if (response.getPerformative() == ACLMessage.FAILURE) {
                     System.err.println("❌ FFA allocation failed: " + response.getContent());
                 } else if (response.getPerformative() == ACLMessage.REFUSE) {
-                    System.err.println("[FederationHelper] ❌ FAM REFUSED allocation request");
+                    System.err.println("[FederationHelper] ❌ FAM REFUSED allocation request for agent: " + agent.getLocalName());
                     System.err.println("[FederationHelper]    Reason: " + response.getContent());
                     System.err.println("[FederationHelper]    This typically means the agent failed policy validation.");
                     System.err.println("[FederationHelper]    Check FederationPolicyManager configuration or agent naming.");
