@@ -22,6 +22,7 @@ def convert_to_camel_case(name):
         "Produced": "produced",
         "Target": "target",
         "Stop": "stop",
+        "Enabled": "enabled",
         "CarryingProduct": "carryingProduct",
         "CarriedProduct": "carriedProduct",
         "BatteryLevel": "batteryLevel",
@@ -79,6 +80,7 @@ def convert_from_camel_case_to_original(name):
         "produced": "Produced",
         "target": "Target",
         "stop": "Stop",
+        "enabled": "Enabled",
         "carryingProduct": "CarryingProduct",
         "carriedProduct": "CarriedProduct",
         "batteryLevel": "BatteryLevel",
@@ -825,6 +827,7 @@ coordination_lock = False  # Prevents simultaneous path planning
 property_names = [
     'Target',
     'Stop',
+    'Enabled',
     'CarryingProduct',
     'CarriedProduct',
     'BatteryLevel',

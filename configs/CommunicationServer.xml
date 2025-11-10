@@ -248,6 +248,55 @@
 <Property>CarryingProduct4</Property>
 </SimulationVariable>
 </Array:anyType>
+<!--  Robot Enabled Variables (SimulationToServer)  -->
+<Array:anyType i:type="VariableGroupItem">
+<DisplayName i:nil="true"/>
+<ServerItem i:type="OpcUA:ValueItemID">
+<OpcUA:NodeId>ns=2;s=1-enabled</OpcUA:NodeId>
+<OpcUA:arrayIndices i:nil="true"/>
+</ServerItem>
+<SimulationVariable>
+<Component>_Template_Mobile_Robot_Resource</Component>
+<Behaviour i:nil="true"/>
+<Property>Enabled1</Property>
+</SimulationVariable>
+</Array:anyType>
+<Array:anyType i:type="VariableGroupItem">
+<DisplayName i:nil="true"/>
+<ServerItem i:type="OpcUA:ValueItemID">
+<OpcUA:NodeId>ns=2;s=2-enabled</OpcUA:NodeId>
+<OpcUA:arrayIndices i:nil="true"/>
+</ServerItem>
+<SimulationVariable>
+<Component>_Template_Mobile_Robot_Resource</Component>
+<Behaviour i:nil="true"/>
+<Property>Enabled2</Property>
+</SimulationVariable>
+</Array:anyType>
+<Array:anyType i:type="VariableGroupItem">
+<DisplayName i:nil="true"/>
+<ServerItem i:type="OpcUA:ValueItemID">
+<OpcUA:NodeId>ns=2;s=3-enabled</OpcUA:NodeId>
+<OpcUA:arrayIndices i:nil="true"/>
+</ServerItem>
+<SimulationVariable>
+<Component>_Template_Mobile_Robot_Resource</Component>
+<Behaviour i:nil="true"/>
+<Property>Enabled3</Property>
+</SimulationVariable>
+</Array:anyType>
+<Array:anyType i:type="VariableGroupItem">
+<DisplayName i:nil="true"/>
+<ServerItem i:type="OpcUA:ValueItemID">
+<OpcUA:NodeId>ns=2;s=4-enabled</OpcUA:NodeId>
+<OpcUA:arrayIndices i:nil="true"/>
+</ServerItem>
+<SimulationVariable>
+<Component>_Template_Mobile_Robot_Resource</Component>
+<Behaviour i:nil="true"/>
+<Property>Enabled4</Property>
+</SimulationVariable>
+</Array:anyType>
 <!--  Input Conveyor Produced Variables (SimulationToServer)  -->
 <Array:anyType i:type="VariableGroupItem">
 <DisplayName i:nil="true"/>
@@ -632,6 +681,55 @@
 <Component>_Template_Mobile_Robot_Resource</Component>
 <Behaviour i:nil="true"/>
 <Property>CarryingProduct4</Property>
+</SimulationVariable>
+</Array:anyType>
+<!--  Robot Enabled Variables (ServerToSimulation)  -->
+<Array:anyType i:type="VariableGroupItem">
+<DisplayName i:nil="true"/>
+<ServerItem i:type="OpcUA:ValueItemID">
+<OpcUA:NodeId>ns=2;s=1-enabled</OpcUA:NodeId>
+<OpcUA:arrayIndices i:nil="true"/>
+</ServerItem>
+<SimulationVariable>
+<Component>_Template_Mobile_Robot_Resource</Component>
+<Behaviour i:nil="true"/>
+<Property>Enabled1</Property>
+</SimulationVariable>
+</Array:anyType>
+<Array:anyType i:type="VariableGroupItem">
+<DisplayName i:nil="true"/>
+<ServerItem i:type="OpcUA:ValueItemID">
+<OpcUA:NodeId>ns=2;s=2-enabled</OpcUA:NodeId>
+<OpcUA:arrayIndices i:nil="true"/>
+</ServerItem>
+<SimulationVariable>
+<Component>_Template_Mobile_Robot_Resource</Component>
+<Behaviour i:nil="true"/>
+<Property>Enabled2</Property>
+</SimulationVariable>
+</Array:anyType>
+<Array:anyType i:type="VariableGroupItem">
+<DisplayName i:nil="true"/>
+<ServerItem i:type="OpcUA:ValueItemID">
+<OpcUA:NodeId>ns=2;s=3-enabled</OpcUA:NodeId>
+<OpcUA:arrayIndices i:nil="true"/>
+</ServerItem>
+<SimulationVariable>
+<Component>_Template_Mobile_Robot_Resource</Component>
+<Behaviour i:nil="true"/>
+<Property>Enabled3</Property>
+</SimulationVariable>
+</Array:anyType>
+<Array:anyType i:type="VariableGroupItem">
+<DisplayName i:nil="true"/>
+<ServerItem i:type="OpcUA:ValueItemID">
+<OpcUA:NodeId>ns=2;s=4-enabled</OpcUA:NodeId>
+<OpcUA:arrayIndices i:nil="true"/>
+</ServerItem>
+<SimulationVariable>
+<Component>_Template_Mobile_Robot_Resource</Component>
+<Behaviour i:nil="true"/>
+<Property>Enabled4</Property>
 </SimulationVariable>
 </Array:anyType>
 </Items>

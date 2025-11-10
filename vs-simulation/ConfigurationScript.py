@@ -114,6 +114,9 @@ raw_components = r'''
                 "name_template": "stop",
                 "type": "boolean",
                 "default": false},              {
+                "name_template": "enabled",
+                "type": "boolean",
+                "default": true},              {
                 "name_template": "priority",
                 "type": "number",
                 "default": 1},              {
