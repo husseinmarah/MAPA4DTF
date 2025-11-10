@@ -6,6 +6,7 @@ import milo.federation.FederationWorkflowOrchestrator;
 import milo.federation.FederationHealthMonitor;
 import milo.federation.FederationPolicyManager; // NEW
 import milo.security.FederationSecurityManager;
+import milo.security.FederationSecurityManager.SecurityContext; // NEW: Keycloak context
 import milo.utils.SL;
 import milo.utils.ACLUtil;
 import jade.core.Agent;
@@ -29,21 +30,34 @@ public class FederationAgentManager extends Agent {
     private FederationHealthMonitor healthMonitor;
     private FederationSecurityManager securityManager;
     private FederationPolicyManager policyManager; // NEW: Policy enforcement
+    private SecurityContext securityContext; // Keycloak authentication context
 
     @Override
     protected void setup() {
         System.out.println("🏗️ " + getLocalName() + " starting (Federation Address Manager)");
         
+        // STEP 1: Authenticate with Keycloak
+        System.out.println("🔐 Authenticating with Keycloak...");
+        securityManager = FederationSecurityManager.getInstance();
+        securityContext = securityManager.authenticateWithKeycloak("FederationAgentManager", "federation");
+        
+        if (securityContext == null) {
+            System.err.println("❌ Keycloak authentication failed for FederationAgentManager");
+            System.err.println("⚠️ Falling back to local authentication");
+            securityManager.registerSecureAgent(getLocalName(), "main", "Main-Container");
+        } else {
+            System.out.println("✅ Authenticated as: " + securityContext.agentName);
+            System.out.println("   Organization: " + securityContext.companyId);
+            System.out.println("   Security Level: " + securityContext.level);
+        }
+        
+        // STEP 2: Initialize federation components
         fapProtocol = new FAPProtocol();
         federatedDirectory = new FederatedDirectoryService();
         workflowOrchestrator = new FederationWorkflowOrchestrator();
         healthMonitor = new FederationHealthMonitor(fapProtocol);
         
-        // Initialize security manager
-        securityManager = FederationSecurityManager.getInstance();
-        securityManager.registerSecureAgent(getLocalName(), "Federation", "Main-Container");
-        
-        // NEW: Initialize policy manager
+        // STEP 3: Initialize policy manager
         policyManager = new FederationPolicyManager(this);
         System.out.println("🛡️ Federation Policy Manager initialized");
         
@@ -77,7 +91,17 @@ public class FederationAgentManager extends Agent {
                 String c = msg.getContent();
                 String senderName = msg.getSender().getLocalName();
                 
-                // NEW: Check container communication policy before processing
+                // SECURITY: Validate message with OPA policy
+                String authenticatedName = securityContext != null ? securityContext.agentName : getLocalName();
+                boolean messageAllowed = securityManager.validateMessageWithOPA(msg, senderName, authenticatedName);
+                
+                if (!messageAllowed) {
+                    System.out.println("🚫 FAM blocked message from " + senderName + " (OPA policy denied)");
+                    sendPolicyViolation(msg, "OPA policy denies this communication");
+                    return;
+                }
+                
+                // Check container communication policy
                 FederationPolicyManager.PolicyDecision commPolicy = 
                     policyManager.checkContainerCommunicationPolicy(msg.getSender(), getAID());
                 

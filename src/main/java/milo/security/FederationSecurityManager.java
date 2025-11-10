@@ -68,14 +68,19 @@ public class FederationSecurityManager {
     
     // Modular components
     private final SecurityValidator validator;
+    private final OPAClient opaClient;
+    private final KeycloakClient keycloakClient;
     
     // Security state management
     private final Map<String, SecurityContext> agentContexts = new ConcurrentHashMap<>();
+    private final Map<String, KeycloakClient.AuthToken> agentTokens = new ConcurrentHashMap<>();
     private final Map<String, List<String>> auditLog = new ConcurrentHashMap<>();
     private final Map<String, Set<String>> companyServices = new ConcurrentHashMap<>();
     
     // Configuration
     private final SecurityConfiguration config;
+    private boolean opaEnabled = false;
+    private boolean keycloakEnabled = false;
     
     /**
      * Private constructor for singleton pattern
@@ -83,6 +88,25 @@ public class FederationSecurityManager {
     private FederationSecurityManager() {
         validator = new SecurityValidator();
         config = new SecurityConfiguration();
+        
+        // Initialize OPA client
+        opaClient = new OPAClient();
+        opaEnabled = opaClient.isAvailable();
+        if (opaEnabled) {
+            System.out.println("🔐 OPA (Open Policy Agent) integration: ✅ ENABLED");
+        } else {
+            System.out.println("⚠️ OPA (Open Policy Agent) integration: ❌ DISABLED (service not available)");
+        }
+        
+        // Initialize Keycloak client
+        keycloakClient = new KeycloakClient();
+        keycloakEnabled = keycloakClient.isAvailable();
+        if (keycloakEnabled) {
+            System.out.println("🔐 Keycloak IAM integration: ✅ ENABLED");
+        } else {
+            System.out.println("⚠️ Keycloak IAM integration: ❌ DISABLED (service not available)");
+        }
+        
         initializeCompanyPolicies();
         System.out.println("🔐 FederationSecurityManager initialized with modular components");
     }
@@ -230,6 +254,191 @@ public class FederationSecurityManager {
     }
     
     /**
+     * Authenticate agent with Keycloak and retrieve user attributes
+     * 
+     * @param agentName Agent username
+     * @param password Agent password
+     * @return SecurityContext with Keycloak attributes or null if authentication failed
+     */
+    public SecurityContext authenticateWithKeycloak(String agentName, String password) {
+        if (!keycloakEnabled) {
+            System.err.println("⚠️ Keycloak is not available, falling back to local authentication");
+            return registerSecureAgent(agentName, "local", "default-container");
+        }
+        
+        try {
+            System.out.println("🔐 Authenticating " + agentName + " with Keycloak...");
+            
+            // Authenticate with Keycloak
+            KeycloakClient.AuthToken token = keycloakClient.authenticate(agentName, password);
+            if (token == null) {
+                logSecurityEvent("KEYCLOAK_AUTH_FAILED", agentName);
+                System.err.println("❌ Keycloak authentication failed for: " + agentName);
+                return null;
+            }
+            
+            // Store token for future use
+            agentTokens.put(agentName, token);
+            
+            // Extract user attributes
+            KeycloakClient.UserAttributes attrs = token.userAttributes;
+            
+            // Map Keycloak role to SecurityLevel
+            SecurityLevel level = mapRoleToSecurityLevel(attrs.role);
+            
+            // Create security context
+            SecurityContext context = new SecurityContext(
+                agentName, attrs.org, "keycloak-managed", level
+            );
+            
+            agentContexts.put(agentName, context);
+            logSecurityEvent("KEYCLOAK_AUTH_SUCCESS", 
+                agentName + " | org:" + attrs.org + " | role:" + attrs.role + " | trust:" + attrs.trustScore);
+            
+            System.out.println("✅ Keycloak authentication successful for: " + agentName);
+            System.out.println("   Org: " + attrs.org + ", Role: " + attrs.role + 
+                             ", Trust Score: " + attrs.trustScore + ", Level: " + level);
+            
+            return context;
+            
+        } catch (Exception e) {
+            logSecurityEvent("KEYCLOAK_AUTH_ERROR", agentName + " - " + e.getMessage());
+            System.err.println("❌ Error during Keycloak authentication: " + e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * Validate message communication using OPA policy engine
+     * 
+     * @param message ACL message to validate
+     * @param sourceAgent Source agent name
+     * @param targetAgent Target agent name
+     * @return true if OPA allows the communication
+     */
+    public boolean validateMessageWithOPA(ACLMessage message, String sourceAgent, String targetAgent) {
+        // First do local validation
+        boolean localValidation = validateMessage(message, sourceAgent, targetAgent);
+        
+        // If OPA is not enabled, return local validation result
+        if (!opaEnabled) {
+            return localValidation;
+        }
+        
+        try {
+            // Get security contexts
+            SecurityContext sourceContext = agentContexts.get(sourceAgent);
+            SecurityContext targetContext = agentContexts.get(targetAgent);
+            
+            if (sourceContext == null || targetContext == null) {
+                System.err.println("⚠️ Missing security context for OPA evaluation");
+                return localValidation; // Fallback to local validation
+            }
+            
+            // Get user attributes from Keycloak token if available
+            double sourceTrustScore = 0.5;
+            String sourceRole = "worker";
+            
+            KeycloakClient.AuthToken sourceToken = agentTokens.get(sourceAgent);
+            if (sourceToken != null && !sourceToken.isExpired()) {
+                sourceTrustScore = sourceToken.userAttributes.trustScore;
+                sourceRole = sourceToken.userAttributes.role;
+            }
+            
+            // Evaluate policy with OPA
+            OPAClient.PolicyDecision decision = opaClient.evaluateCommunicationPolicy(
+                sourceAgent, sourceContext.companyId, sourceRole, sourceTrustScore,
+                targetAgent, targetContext.companyId, "send"
+            );
+            
+            if (!decision.allowed) {
+                logSecurityEvent("OPA_DENIED", sourceAgent + " -> " + targetAgent + " (" + decision.reason + ")");
+            } else {
+                logSecurityEvent("OPA_ALLOWED", sourceAgent + " -> " + targetAgent);
+            }
+            
+            // Return OPA decision (overrides local validation)
+            return decision.allowed;
+            
+        } catch (Exception e) {
+            logSecurityEvent("OPA_ERROR", sourceAgent + " -> " + targetAgent + " - " + e.getMessage());
+            System.err.println("❌ Error during OPA policy evaluation: " + e.getMessage());
+            return localValidation; // Fallback to local validation on error
+        }
+    }
+    
+    /**
+     * Check if agent's token needs refresh and refresh if necessary
+     * 
+     * @param agentName Agent name
+     * @return true if token is valid (or successfully refreshed)
+     */
+    public boolean refreshTokenIfNeeded(String agentName) {
+        if (!keycloakEnabled) {
+            return true; // No token management if Keycloak is disabled
+        }
+        
+        KeycloakClient.AuthToken token = agentTokens.get(agentName);
+        if (token == null) {
+            return false;
+        }
+        
+        if (token.isExpired()) {
+            System.err.println("⚠️ Token expired for " + agentName);
+            return false;
+        }
+        
+        if (token.needsRefresh()) {
+            System.out.println("🔄 Refreshing token for " + agentName);
+            KeycloakClient.AuthToken newToken = keycloakClient.refreshToken(token.refreshToken);
+            
+            if (newToken != null) {
+                agentTokens.put(agentName, newToken);
+                logSecurityEvent("TOKEN_REFRESHED", agentName);
+                return true;
+            } else {
+                System.err.println("❌ Failed to refresh token for " + agentName);
+                logSecurityEvent("TOKEN_REFRESH_FAILED", agentName);
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Map Keycloak role to SecurityLevel
+     */
+    private SecurityLevel mapRoleToSecurityLevel(String role) {
+        if (role == null) return SecurityLevel.RESTRICTED;
+        
+        switch (role.toLowerCase()) {
+            case "federation_manager":
+            case "admin":
+                return SecurityLevel.PRIVILEGED;
+            case "manager":
+            case "trusted":
+                return SecurityLevel.TRUSTED;
+            case "worker":
+                return SecurityLevel.RESTRICTED;
+            default:
+                return SecurityLevel.PUBLIC;
+        }
+    }
+    
+    /**
+     * Check OPA and Keycloak service status
+     */
+    public Map<String, Boolean> getServiceStatus() {
+        Map<String, Boolean> status = new HashMap<>();
+        status.put("opa-enabled", opaEnabled);
+        status.put("opa-available", opaClient.isAvailable());
+        status.put("keycloak-enabled", keycloakEnabled);
+        status.put("keycloak-available", keycloakClient.isAvailable());
+        return status;
+    }
+    
+    /**
      * Test the security system - for integration testing
      */
     public boolean performSecurityTest() {
@@ -256,6 +465,10 @@ public class FederationSecurityManager {
             
             SecurityValidator.ValidationResult crossResult = validator.validateCrossCommunication(testContext, otherContext);
             // This should succeed for TRUSTED level agents
+            
+            // Test 4: Check service status
+            Map<String, Boolean> serviceStatus = getServiceStatus();
+            System.out.println("🔍 Service Status: " + serviceStatus);
             
             // Cleanup test data
             agentContexts.remove("TestAgent");

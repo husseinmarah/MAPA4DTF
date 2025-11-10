@@ -7,6 +7,8 @@ import jade.domain.FIPAException;
 import jade.domain.FIPAAgentManagement.*;
 import jade.domain.AMSService;
 import jade.domain.JADEAgentManagement.*;
+import milo.security.FederationSecurityManager;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.time.LocalDateTime;
@@ -73,6 +75,7 @@ public class FederationPolicyManager {
     private final Map<String, Set<String>> federationMembership;
     private final List<String> auditLog;
     private final Agent parentAgent;
+    private final FederationSecurityManager securityManager;
     
     public FederationPolicyManager(Agent parentAgent) {
         this.parentAgent = parentAgent;
@@ -80,7 +83,14 @@ public class FederationPolicyManager {
         this.containerAgentMap = new ConcurrentHashMap<>();
         this.federationMembership = new ConcurrentHashMap<>();
         this.auditLog = new ArrayList<>();
+        this.securityManager = FederationSecurityManager.getInstance();
         initializeDefaultPolicies();
+        
+        // Display integration status
+        Map<String, Boolean> serviceStatus = securityManager.getServiceStatus();
+        System.out.println("🔐 FederationPolicyManager integration status:");
+        System.out.println("   OPA: " + (serviceStatus.get("opa-available") ? "✅ Connected" : "❌ Not available"));
+        System.out.println("   Keycloak: " + (serviceStatus.get("keycloak-available") ? "✅ Connected" : "❌ Not available"));
     }
     
     /**

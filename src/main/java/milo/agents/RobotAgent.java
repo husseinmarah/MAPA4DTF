@@ -9,6 +9,8 @@ import milo.opcua.server.CustomNamespace;
 import milo.federation.FederationHelper;
 import milo.opcua.server.RobotTemplate;
 import milo.opcua.server.SystemConfig;
+import milo.security.FederationSecurityManager;
+import milo.security.FederationSecurityManager.SecurityContext;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -36,6 +38,12 @@ public class RobotAgent extends Agent {
     // =====================================================================
     private String myFFA; // This agent's Federation Fractal Address
     private boolean federationEnabled = false; // Whether federation is active
+    
+    // =====================================================================
+    // SECURITY
+    // =====================================================================
+    private FederationSecurityManager securityManager;
+    private SecurityContext securityContext; // Keycloak authentication context
 
     // =====================================================================
     // UTILITY METHODS
@@ -59,6 +67,21 @@ public class RobotAgent extends Agent {
         }
         
         System.out.println("Agent " + getLocalName() + " started managing Robot " + robotId + " with interval: " + AGENT_INTERVAL + "ms");
+        
+        // STEP 1: Authenticate with Keycloak
+        System.out.println("🔐 Authenticating Robot" + robotId + " with Keycloak...");
+        securityManager = FederationSecurityManager.getInstance();
+        securityContext = securityManager.authenticateWithKeycloak("RobotAgent", "robot");
+        
+        if (securityContext == null) {
+            System.err.println("❌ Keycloak authentication failed for RobotAgent");
+            System.err.println("⚠️ Falling back to local authentication");
+            securityManager.registerSecureAgent(getLocalName(), "Stakeholder1_RobotContainer", "Main-Container");
+        } else {
+            System.out.println("✅ Authenticated as: " + securityContext.agentName);
+            System.out.println("   Organization: " + securityContext.companyId);
+            System.out.println("   Security Level: " + securityContext.level);
+        }
         
         // Add small delay to ensure ProductionAgentManager is ready
         addBehaviour(new jade.core.behaviours.WakerBehaviour(this, 2000) {
@@ -623,6 +646,17 @@ public class RobotAgent extends Agent {
         
         private void handleProductionCommand(ACLMessage msg) {
             try {
+                // SECURITY: Validate message with OPA policy
+                String senderName = msg.getSender().getLocalName();
+                String receiverName = securityContext != null ? securityContext.agentName : myAgent.getLocalName();
+                boolean messageAllowed = securityManager.validateMessageWithOPA(msg, senderName, receiverName);
+                
+                if (!messageAllowed) {
+                    System.out.println("🚫 RobotAgent blocked command from " + senderName + " (OPA policy denied)");
+                    sendTaskFailedAck(msg.getSender(), "UNKNOWN", "Security policy denies this command");
+                    return;
+                }
+                
                 String content = msg.getContent();
                 System.out.println("[" + myAgent.getLocalName() + "] Received production command: " + content);
                 

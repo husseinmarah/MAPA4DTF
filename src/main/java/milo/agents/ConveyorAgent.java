@@ -5,6 +5,8 @@ import jade.core.behaviours.ParallelBehaviour;
 import jade.core.behaviours.TickerBehaviour;
 import milo.opcua.server.CustomNamespace;
 import milo.federation.FederationHelper;
+import milo.security.FederationSecurityManager;
+import milo.security.FederationSecurityManager.SecurityContext;
 import org.eclipse.milo.opcua.sdk.server.nodes.UaVariableNode;
 import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue;
 import org.eclipse.milo.opcua.stack.core.types.builtin.Variant;
@@ -29,6 +31,12 @@ public class ConveyorAgent extends Agent {
     // =====================================================================
     private String myFFA; // This agent's Federation Fractal Address
     private boolean federationEnabled = false; // Whether federation is active
+    
+    // =====================================================================
+    // SECURITY
+    // =====================================================================
+    private FederationSecurityManager securityManager;
+    private SecurityContext securityContext; // Keycloak authentication context
     
     // Default constructor for JADE agent creation
     public ConveyorAgent() {
@@ -58,6 +66,21 @@ public class ConveyorAgent extends Agent {
         }
         
         System.out.println("Agent " + getLocalName() + " started managing Conveyor " + conveyorId + " with interval: " + AGENT_INTERVAL + "ms");
+        
+        // STEP 1: Authenticate with Keycloak
+        System.out.println("🔐 Authenticating Conveyor" + conveyorId + " with Keycloak...");
+        securityManager = FederationSecurityManager.getInstance();
+        securityContext = securityManager.authenticateWithKeycloak("ConveyorAgent", "conveyor");
+        
+        if (securityContext == null) {
+            System.err.println("❌ Keycloak authentication failed for ConveyorAgent");
+            System.err.println("⚠️ Falling back to local authentication");
+            securityManager.registerSecureAgent(getLocalName(), "Stakeholder3_ConveyorContainer", "Main-Container");
+        } else {
+            System.out.println("✅ Authenticated as: " + securityContext.agentName);
+            System.out.println("   Organization: " + securityContext.companyId);
+            System.out.println("   Security Level: " + securityContext.level);
+        }
         
         // Add small delay to ensure ProductionAgentManager is ready
         addBehaviour(new jade.core.behaviours.WakerBehaviour(this, 2000) {
@@ -343,6 +366,17 @@ public class ConveyorAgent extends Agent {
         
         private void handleProductionCommand(jade.lang.acl.ACLMessage msg) {
             try {
+                // SECURITY: Validate message with OPA policy
+                String senderName = msg.getSender().getLocalName();
+                String receiverName = securityContext != null ? securityContext.agentName : myAgent.getLocalName();
+                boolean messageAllowed = securityManager.validateMessageWithOPA(msg, senderName, receiverName);
+                
+                if (!messageAllowed) {
+                    System.out.println("🚫 ConveyorAgent blocked command from " + senderName + " (OPA policy denied)");
+                    sendTaskFailedAck(msg.getSender(), "UNKNOWN", "Security policy denies this command");
+                    return;
+                }
+                
                 String content = msg.getContent();
                 System.out.println("[" + myAgent.getLocalName() + "] Received production command: " + content);
                 

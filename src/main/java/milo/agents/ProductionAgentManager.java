@@ -12,6 +12,7 @@ import jade.domain.FIPAAgentManagement.ServiceDescription;
 import jade.domain.FIPAException;
 import milo.federation.FederationHelper;
 import milo.security.FederationSecurityManager;
+import milo.security.FederationSecurityManager.SecurityContext; // NEW: Keycloak context
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,6 +37,12 @@ public class ProductionAgentManager extends Agent {
     // =====================================================================
     private String myFFA; // This manager's Federation Fractal Address
     private boolean federationEnabled = false;
+    
+    // =====================================================================
+    // SECURITY
+    // =====================================================================
+    private FederationSecurityManager securityManager;
+    private SecurityContext securityContext; // Keycloak authentication context
     
     // =====================================================================
     // INNER CLASSES
@@ -95,7 +102,21 @@ public class ProductionAgentManager extends Agent {
     @Override
     protected void setup() {
         System.out.println("[" + getLocalName() + "] Production Agent Manager starting...");
-        FederationSecurityManager.getInstance().registerSecureAgent(getLocalName(), "Federation", "Main-Container");
+        
+        // STEP 1: Authenticate with Keycloak
+        System.out.println("🔐 Authenticating with Keycloak...");
+        securityManager = FederationSecurityManager.getInstance();
+        securityContext = securityManager.authenticateWithKeycloak("ProductionAgentManager", "production");
+        
+        if (securityContext == null) {
+            System.err.println("❌ Keycloak authentication failed for ProductionAgentManager");
+            System.err.println("⚠️ Falling back to local authentication");
+            securityManager.registerSecureAgent(getLocalName(), "main", "Main-Container");
+        } else {
+            System.out.println("✅ Authenticated as: " + securityContext.agentName);
+            System.out.println("   Organization: " + securityContext.companyId);
+            System.out.println("   Security Level: " + securityContext.level);
+        }
 
         // Initialize data structures
         managedAgents = new ConcurrentHashMap<>();
@@ -200,6 +221,17 @@ public class ProductionAgentManager extends Agent {
         
         private void handleAgentRegistration(ACLMessage msg) {
             try {
+                // SECURITY: Validate message with OPA policy
+                String senderName = msg.getSender().getLocalName();
+                String receiverName = securityContext != null ? securityContext.agentName : myAgent.getLocalName();
+                boolean messageAllowed = securityManager.validateMessageWithOPA(msg, senderName, receiverName);
+                
+                if (!messageAllowed) {
+                    System.out.println("🚫 PAM blocked registration from " + senderName + " (OPA policy denied)");
+                    sendRegistrationAck(msg.getSender(), "ERROR", "Security policy denies registration");
+                    return;
+                }
+                
                 String content = msg.getContent();
                 AID senderAID = msg.getSender();
                 
