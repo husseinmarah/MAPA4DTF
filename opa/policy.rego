@@ -2,30 +2,36 @@ package authz
 
 default allow := false
 
-# --- Authorized stakeholders (Stakeholder2 is BLOCKED) ---
-authorized_stakeholders := {"Stakeholder1_RobotContainer", "Stakeholder3_ConveyorContainer"}
+# ============================================================
+# ATTRIBUTE-BASED ACCESS CONTROL (ABAC)
+# Policy driven by Keycloak user attributes (status, org, role, trustScore)
+# ============================================================
 
-# --- Blocked stakeholders (explicit deny list) ---
-blocked_stakeholders := {"Stakeholder2_RobotContainer"}
+# --- Authorized stakeholders ---
+authorized_stakeholders := {
+    "Stakeholder1_RobotContainer",
+    "Stakeholder2_RobotContainer",
+    "Stakeholder3_ConveyorContainer"
+}
 
-# --- PRIORITY RULE: Block all communication from blocked stakeholders ---
-# This rule ensures blocked stakeholders are denied before any allow rules
+# --- PRIORITY RULE 1: Block agents with status="blocked" (from Keycloak) ---
+# This is attribute-based - just change the status in Keycloak!
 allow if {
-    blocked_stakeholders[input.sender.org]
-    false  # Explicitly deny - this rule will never allow
+    input.sender.status == "blocked"
+    false  # Explicitly deny blocked agent
 }
 
 allow if {
-    blocked_stakeholders[input.receiver.org]
-    false  # Also block communication TO blocked stakeholders
+    input.receiver.status == "blocked"
+    false  # Also block communication TO blocked agents
 }
 
 # --- Allow: worker role from authorized stakeholders ---
 allow if {
     input.action == "send"
     input.sender.role == "worker"
+    input.sender.status == "active"  # Check status from Keycloak
     authorized_stakeholders[input.sender.org]
-    not blocked_stakeholders[input.sender.org]  # Extra safety check
     is_permitted_for_receiver(input.sender, input.receiver)
 }
 
@@ -33,8 +39,8 @@ allow if {
 allow if {
     input.action == "send"
     input.sender.trustScore >= 0.8
+    input.sender.status == "active"  # Check status from Keycloak
     authorized_stakeholders[input.sender.org]
-    not blocked_stakeholders[input.sender.org]
     input.receiver.org == "main"
 }
 
@@ -42,23 +48,24 @@ allow if {
 allow if {
     input.action == "send"
     input.sender.role == "federation_manager"
+    input.sender.status == "active"  # Check status from Keycloak
     authorized_stakeholders[input.sender.org]
-    not blocked_stakeholders[input.sender.org]
 }
 
 # --- Manager role from authorized stakeholders ---
 allow if {
     input.action == "send"
     input.sender.role == "manager"
+    input.sender.status == "active"  # Check status from Keycloak
     authorized_stakeholders[input.sender.org]
-    not blocked_stakeholders[input.sender.org]
 }
 
 # --- Helper: Check if receiver is permitted ---
 is_permitted_for_receiver(sender, receiver) if {
     receiver.org == "main"
     authorized_stakeholders[sender.org]
-    not blocked_stakeholders[sender.org]
+    sender.status == "active"  # Check status from Keycloak
+    receiver.status == "active"  # Check receiver status
     sender.trustScore >= 0.8
 }
 
@@ -66,7 +73,8 @@ is_permitted_for_receiver(sender, receiver) if {
 is_permitted_for_receiver(sender, receiver) if {
     sender.org == "main"
     authorized_stakeholders[receiver.org]
-    not blocked_stakeholders[receiver.org]
+    sender.status == "active"  # Check status from Keycloak
+    receiver.status == "active"  # Check receiver status
     valid_roles := {"manager", "federation_manager"}
     valid_roles[sender.role]
 }
@@ -76,7 +84,8 @@ is_permitted_for_receiver(sender, receiver) if {
     receiver.org != "main"
     sender.org == receiver.org
     authorized_stakeholders[sender.org]
-    not blocked_stakeholders[sender.org]
+    sender.status == "active"  # Check status from Keycloak
+    receiver.status == "active"  # Check receiver status
     valid_worker_roles := {"worker"}
     valid_worker_roles[sender.role]
 }

@@ -77,7 +77,8 @@ public class ConveyorAgent extends Agent {
             System.err.println("⚠️ Could not detect container name: " + e.getMessage());
         }
         
-        String keycloakUsername = "ConveyorAgent_Stakeholder3";
+        // Use agent's local name as Keycloak username for agent-level blocking
+        String keycloakUsername = getLocalName();  // e.g., "ConveyorAgent1", "ConveyorAgent2"
         String keycloakPassword = "conveyor";
         String organization = "Stakeholder3_ConveyorContainer";
         
@@ -87,9 +88,10 @@ public class ConveyorAgent extends Agent {
         }
         
         System.out.println("┌─ AUTHENTICATION MAPPING ──────────────────────────");
-        System.out.println("│  Container: " + containerName);
+        System.out.println("│  Agent Name:    " + getLocalName());
+        System.out.println("│  Container:     " + containerName);
         System.out.println("│  Keycloak User: " + keycloakUsername);
-        System.out.println("│  Organization: " + organization);
+        System.out.println("│  Organization:  " + organization);
         System.out.println("└───────────────────────────────────────────────────");
         
         securityManager = FederationSecurityManager.getInstance();

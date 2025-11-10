@@ -78,34 +78,31 @@ public class RobotAgent extends Agent {
             System.err.println("⚠️ Could not detect container name: " + e.getMessage());
         }
         
-        String keycloakUsername;
-        String keycloakPassword;
+        // Use agent's local name as Keycloak username for agent-level blocking
+        String keycloakUsername = getLocalName();  // e.g., "RobotAgent1", "RobotAgent4"
+        String keycloakPassword = "robot";
         String organization;
         
-        // Map exact container name to Keycloak credentials
+        // Map container name to organization
         if (containerName.equals("Stakeholder1_RobotContainer")) {
-            keycloakUsername = "RobotAgent_Stakeholder1";
-            keycloakPassword = "robot";
             organization = "Stakeholder1_RobotContainer";
         } else if (containerName.equals("Stakeholder2_RobotContainer")) {
-            keycloakUsername = "RobotAgent_Stakeholder2";
-            keycloakPassword = "robot";
             organization = "Stakeholder2_RobotContainer";
+        } else if (containerName.equals("Main-Container")) {
+            organization = "Stakeholder1_RobotContainer";  // Default for main container
         } else {
-            // Fallback: default to Stakeholder1
-                        System.out.println(""
+            System.out.println(""
                     + "┌─ AUTHENTICATION FALLBACK ────────────────────────\n"
                     + "│  ⚠️ Unknown container: " + containerName + "\n"
                     + "└──────────────────────────────────────────────────");
-            keycloakUsername = "RobotAgent_Stakeholder1";
-            keycloakPassword = "robot";
             organization = "Stakeholder1_RobotContainer";
         }
         
         System.out.println("┌─ AUTHENTICATION MAPPING ──────────────────────────");
-        System.out.println("│  Container: " + containerName);
+        System.out.println("│  Agent Name:  " + getLocalName());
+        System.out.println("│  Container:   " + containerName);
         System.out.println("│  Keycloak User: " + keycloakUsername);
-        System.out.println("│  Organization: " + organization);
+        System.out.println("│  Organization:  " + organization);
         System.out.println("└───────────────────────────────────────────────────");
         
         securityManager = FederationSecurityManager.getInstance();

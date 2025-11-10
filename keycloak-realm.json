@@ -51,6 +51,20 @@
             "claim.name": "trustScore",
             "jsonType.label": "String"
           }
+        },
+        {
+          "name": "status",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "status",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "status",
+            "jsonType.label": "String"
+          }
         }
       ]
     }
@@ -77,33 +91,69 @@
       }
     },
     {
-      "username": "RobotAgent_Stakeholder1",
+      "username": "RobotAgent1",
       "enabled": true,
       "credentials": [{ "type": "password", "value": "robot", "temporary": false }],
       "attributes": {
         "org": ["Stakeholder1_RobotContainer"],
         "role": ["worker"],
-        "trustScore": ["0.85"]
+        "trustScore": ["0.85"],
+        "status": ["active"]
       }
     },
     {
-      "username": "RobotAgent_Stakeholder2",
+      "username": "RobotAgent2",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "robot", "temporary": false }],
+      "attributes": {
+        "org": ["Stakeholder1_RobotContainer"],
+        "role": ["worker"],
+        "trustScore": ["0.85"],
+        "status": ["blocked"]
+      }
+    },
+    {
+      "username": "RobotAgent3",
       "enabled": true,
       "credentials": [{ "type": "password", "value": "robot", "temporary": false }],
       "attributes": {
         "org": ["Stakeholder2_RobotContainer"],
         "role": ["worker"],
-        "trustScore": ["0.9"]
+        "trustScore": ["0.9"],
+        "status": ["active"]
       }
     },
     {
-      "username": "ConveyorAgent_Stakeholder3",
+      "username": "RobotAgent4",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "robot", "temporary": false }],
+      "attributes": {
+        "org": ["Stakeholder2_RobotContainer"],
+        "role": ["worker"],
+        "trustScore": ["0.9"],
+        "status": ["blocked"]
+      }
+    },
+    {
+      "username": "ConveyorAgent1",
       "enabled": true,
       "credentials": [{ "type": "password", "value": "conveyor", "temporary": false }],
       "attributes": {
         "org": ["Stakeholder3_ConveyorContainer"],
         "role": ["worker"],
-        "trustScore": ["0.8"]
+        "trustScore": ["0.8"],
+        "status": ["active"]
+      }
+    },
+    {
+      "username": "ConveyorAgent2",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "conveyor", "temporary": false }],
+      "attributes": {
+        "org": ["Stakeholder3_ConveyorContainer"],
+        "role": ["worker"],
+        "trustScore": ["0.8"],
+        "status": ["active"]  
       }
     }
   ]

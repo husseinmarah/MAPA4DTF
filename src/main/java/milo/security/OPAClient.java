@@ -44,14 +44,16 @@ public class OPAClient {
      * @param senderOrg Organization of sender
      * @param senderRole Role of sender
      * @param senderTrustScore Trust score of sender
+     * @param senderStatus Status of sender (active/blocked)
      * @param receiverName Agent name receiving the message
      * @param receiverOrg Organization of receiver
+     * @param receiverStatus Status of receiver (active/blocked)
      * @param action Action being performed (e.g., "send")
      * @return PolicyDecision with allow/deny and reason
      */
     public PolicyDecision evaluateCommunicationPolicy(
-            String senderName, String senderOrg, String senderRole, double senderTrustScore,
-            String receiverName, String receiverOrg, String action) {
+            String senderName, String senderOrg, String senderRole, double senderTrustScore, String senderStatus,
+            String receiverName, String receiverOrg, String receiverStatus, String action) {
         
         try {
             // Build OPA input JSON
@@ -63,11 +65,13 @@ public class OPAClient {
             sender.put("org", senderOrg);
             sender.put("role", senderRole);
             sender.put("trustScore", senderTrustScore);
+            sender.put("status", senderStatus);
             input.put("sender", sender);
             
             JSONObject receiver = new JSONObject();
             receiver.put("name", receiverName);
             receiver.put("org", receiverOrg);
+            receiver.put("status", receiverStatus);
             input.put("receiver", receiver);
             
             JSONObject requestBody = new JSONObject();
@@ -147,16 +151,17 @@ public class OPAClient {
      * @param agentOrg Organization of agent
      * @param agentRole Role of agent
      * @param agentTrustScore Trust score of agent
+     * @param agentStatus Status of agent (active/blocked)
      * @param federationId Federation ID to join
      * @return PolicyDecision with allow/deny and reason
      */
     public PolicyDecision evaluateFederationJoinPolicy(
             String agentName, String agentOrg, String agentRole, 
-            double agentTrustScore, String federationId) {
+            double agentTrustScore, String agentStatus, String federationId) {
         
         return evaluateCommunicationPolicy(
-            agentName, agentOrg, agentRole, agentTrustScore,
-            "FederationManager", federationId, "join_federation"
+            agentName, agentOrg, agentRole, agentTrustScore, agentStatus,
+            "FederationManager", federationId, "active", "join_federation"
         );
     }
     
@@ -167,16 +172,17 @@ public class OPAClient {
      * @param agentOrg Organization of agent
      * @param agentRole Role of agent
      * @param agentTrustScore Trust score of agent
+     * @param agentStatus Status of agent (active/blocked)
      * @param resourceType Type of resource requested
      * @return PolicyDecision with allow/deny and reason
      */
     public PolicyDecision evaluateResourceAllocationPolicy(
             String agentName, String agentOrg, String agentRole,
-            double agentTrustScore, String resourceType) {
+            double agentTrustScore, String agentStatus, String resourceType) {
         
         return evaluateCommunicationPolicy(
-            agentName, agentOrg, agentRole, agentTrustScore,
-            "ResourceManager", "main", "allocate_resource"
+            agentName, agentOrg, agentRole, agentTrustScore, agentStatus,
+            "ResourceManager", "main", "active", "allocate_resource"
         );
     }
     

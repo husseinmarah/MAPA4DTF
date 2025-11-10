@@ -374,17 +374,26 @@ public class FederationSecurityManager {
             // Get user attributes from Keycloak token if available
             double sourceTrustScore = 0.5;
             String sourceRole = "worker";
+            String sourceStatus = "active";
             
             KeycloakClient.AuthToken sourceToken = agentTokens.get(sourceAgent);
             if (sourceToken != null && !sourceToken.isExpired()) {
                 sourceTrustScore = sourceToken.userAttributes.trustScore;
                 sourceRole = sourceToken.userAttributes.role;
+                sourceStatus = sourceToken.userAttributes.status;
+            }
+            
+            // Get target status (default to active for managers in main container)
+            String targetStatus = "active";
+            KeycloakClient.AuthToken targetToken = agentTokens.get(targetAgent);
+            if (targetToken != null && !targetToken.isExpired()) {
+                targetStatus = targetToken.userAttributes.status;
             }
             
             // Evaluate policy with OPA
             OPAClient.PolicyDecision decision = opaClient.evaluateCommunicationPolicy(
-                sourceAgent, sourceContext.companyId, sourceRole, sourceTrustScore,
-                targetAgent, targetContext.companyId, "send"
+                sourceAgent, sourceContext.companyId, sourceRole, sourceTrustScore, sourceStatus,
+                targetAgent, targetContext.companyId, targetStatus, "send"
             );
             
             if (!decision.allowed) {

@@ -187,8 +187,9 @@ public class KeycloakClient {
         String org = extractClaim(claims, "org", "unknown");
         String role = extractClaim(claims, "role", "worker");
         double trustScore = extractTrustScore(claims);
+        String status = extractClaim(claims, "status", "active");
         
-        return new UserAttributes(username, org, role, trustScore);
+        return new UserAttributes(username, org, role, trustScore, status);
     }
     
     /**
@@ -299,18 +300,20 @@ public class KeycloakClient {
         public final String org;
         public final String role;
         public final double trustScore;
+        public final String status;
         
-        public UserAttributes(String username, String org, String role, double trustScore) {
+        public UserAttributes(String username, String org, String role, double trustScore, String status) {
             this.username = username;
             this.org = org;
             this.role = role;
             this.trustScore = trustScore;
+            this.status = status;
         }
         
         @Override
         public String toString() {
             return "UserAttributes{username='" + username + "', org='" + org + 
-                   "', role='" + role + "', trustScore=" + trustScore + "}";
+                   "', role='" + role + "', trustScore=" + trustScore + ", status='" + status + "'}";
         }
     }
     
