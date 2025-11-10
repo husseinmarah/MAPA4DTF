@@ -2,6 +2,7 @@ package authz
 
 default allow := false
 
+# Check 1: Is sender from authorized stakeholder?
 # --- Authorized stakeholders (Stakeholder2 is BLOCKED) ---
 authorized_stakeholders := {"Stakeholder1_RobotContainer", "Stakeholder3_ConveyorContainer"}
 
@@ -11,6 +12,7 @@ allow if {
     false  # Explicitly deny
 }
 
+# Check 2: Is role "worker"?
 # --- Allow: worker role from authorized stakeholders ---
 allow if {
     input.action == "send"
@@ -41,6 +43,7 @@ allow if {
     authorized_stakeholders[input.sender.org]
 }
 
+# Check 3: Can worker communicate with main?
 # --- Main container can communicate with authorized stakeholder containers only ---
 is_permitted_for_receiver(sender, receiver) if {
     receiver.org == "main"
