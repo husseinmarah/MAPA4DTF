@@ -105,3 +105,39 @@ is_permitted_for_receiver(sender, receiver) if {
     valid_worker_roles := {"worker"}
     valid_worker_roles[sender.role]
 }
+
+# ============================================================
+# ROBOT OPERATION ACCESS CONTROL
+# Controls which agents can operate robots based on status, role, and trust
+# ============================================================
+
+# --- Allow robot operations for active workers with sufficient trust ---
+allow if {
+    input.action == "robot_operation"
+    input.sender.role == "worker"
+    input.sender.status == "active"  # Must be active in Keycloak
+    input.sender.trustScore >= 0.5  # Minimum trust score
+    authorized_stakeholders[input.sender.org]
+}
+
+# --- Allow robot operations for managers ---
+allow if {
+    input.action == "robot_operation"
+    input.sender.role == "manager"
+    input.sender.status == "active"  # Must be active in Keycloak
+    authorized_stakeholders[input.sender.org]
+}
+
+# --- Allow robot operations for federation managers ---
+allow if {
+    input.action == "robot_operation"
+    input.sender.role == "federation_manager"
+    input.sender.status == "active"  # Must be active in Keycloak
+}
+
+# --- Explicitly deny robot operations for blocked agents ---
+allow if {
+    input.action == "robot_operation"
+    input.sender.status == "blocked"
+    false  # Blocked agents cannot operate robots
+}
