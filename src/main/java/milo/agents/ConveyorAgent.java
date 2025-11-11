@@ -228,11 +228,63 @@ public class ConveyorAgent extends Agent {
     }
     
     /**
-     * Broadcast production status to federation members
+     * Broadcast production status to federation members (Horizontal Federation)
+     * Notifies all authorized RobotAgents when a new product is ready for pickup
      */
     private void broadcastProductionStatus() {
-        // This would send production status updates to interested federation members
-        // Implementation would depend on specific federation coordination requirements
+        try {
+            // Only broadcast if product is ready
+            if (!getProduced()) {
+                return;
+            }
+            
+            // Create notification message
+            jade.lang.acl.ACLMessage notification = new jade.lang.acl.ACLMessage(jade.lang.acl.ACLMessage.INFORM);
+            notification.setProtocol("product-ready-notification");
+            
+            // Find all RobotAgents and check OPA authorization before adding them
+            int authorizedRobots = 0;
+            for (int i = 1; i <= milo.opcua.server.CustomNamespace.robots.size(); i++) {
+                String robotAgentName = "RobotAgent" + i;
+                
+                // OPA CHECK: Can this conveyor communicate with the robot?
+                if (securityManager != null && securityManager.canCommunicateWith(getLocalName(), robotAgentName)) {
+                    notification.addReceiver(new jade.core.AID(robotAgentName, jade.core.AID.ISLOCALNAME));
+                    authorizedRobots++;
+                    System.out.println("🔗 " + getLocalName() + " → " + robotAgentName + " (OPA: Communication allowed)");
+                } else {
+                    System.out.println("🚫 " + getLocalName() + " ✗ " + robotAgentName + " (OPA: Communication blocked)");
+                }
+            }
+            
+            // Only send if there are authorized receivers
+            if (authorizedRobots > 0) {
+                String content = String.format(
+                    "(ProductReady :conveyor \"%s\" :conveyorId %d :location \"%s\" :time \"%s\")",
+                    getLocalName(),
+                    conveyorId,
+                    "InputConveyor #" + conveyorId,
+                    java.time.Instant.now()
+                );
+                
+                notification.setContent(content);
+                send(notification);
+                
+                System.out.println("┌─ PRODUCT NOTIFICATION ───────────────────────────");
+                System.out.println("│  📢 BROADCAST");
+                System.out.println("│  Time:      " + java.time.Instant.now());
+                System.out.println("│  Conveyor:  " + getLocalName() + " (#" + conveyorId + ")");
+                System.out.println("│  Recipients: " + authorizedRobots + " authorized robots");
+                System.out.println("│  Message:   Product ready for pickup");
+                System.out.println("└──────────────────────────────────────────────────");
+            } else {
+                System.out.println("⚠️ " + getLocalName() + " - No authorized robots for notification");
+            }
+            
+        } catch (Exception e) {
+            System.err.println("❌ " + getLocalName() + " - Error broadcasting production status: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
     
     // =====================================================================
@@ -264,9 +316,17 @@ public class ConveyorAgent extends Agent {
     public void setProduced(boolean produced) {
         try {
             producedNode.setValue(new DataValue(new Variant(produced)));
-            System.out.println("Conveyor " + conveyorId + " produced status set to: " + produced);
+            if (!produced) {
+                // Only log when product is picked up (status changes to false)
+                System.out.println("┌─ CONVEYOR STATUS UPDATE ─────────────────────────");
+                System.out.println("│  🏭 PRODUCT PICKED UP");
+                System.out.println("│  Time:     " + java.time.Instant.now());
+                System.out.println("│  Conveyor: " + getLocalName() + " (#" + conveyorId + ")");
+                System.out.println("│  Status:   Produced → false");
+                System.out.println("└──────────────────────────────────────────────────");
+            }
         } catch (Exception e) {
-            System.err.println("Error setting produced value for conveyor " + conveyorId + ": " + e.getMessage());
+            System.err.println("❌ Error setting produced value for conveyor " + conveyorId + ": " + e.getMessage());
         }
     }
     

@@ -165,10 +165,11 @@ public class FederationSecurityManager {
         if (context != null) {
             // Register the local name with the same context
             agentContexts.put(localName, context);
-            // Also link the token
+            // Also link the token - use the SAME token object (not a copy) so updates are shared
             KeycloakClient.AuthToken token = agentTokens.get(authenticatedName);
             if (token != null) {
                 agentTokens.put(localName, token);
+                System.out.println("🔗 Linked " + localName + " to context of " + authenticatedName + " (shared token)");
             }
             return true;
         }
@@ -177,7 +178,7 @@ public class FederationSecurityManager {
     
     /**
      * Check if an agent can access a specific service
-     * For robot operations, also validates with OPA policy
+     * For robot operations and conveyor access, also validates with OPA policy
      */
     public boolean canAccessService(String agentName, String serviceName) {
         try {
@@ -188,9 +189,9 @@ public class FederationSecurityManager {
                 return false;
             }
             
-            // For robot operations, use OPA if available
-            if (opaEnabled && serviceName.equals("robot_operation")) {
-                return validateRobotOperationWithOPA(agentName, context);
+            // For robot operations and conveyor access, use OPA if available
+            if (opaEnabled && (serviceName.equals("robot_operation") || serviceName.equals("conveyor_access"))) {
+                return validateServiceAccessWithOPA(agentName, context, serviceName);
             }
             
             // For other services, use local validation
@@ -214,38 +215,51 @@ public class FederationSecurityManager {
     }
     
     /**
-     * Validate robot operation access with OPA
-     * Checks if the agent is authorized to operate a robot based on policy
+     * Validate service access with OPA (for robot operations and conveyor access)
+     * Checks if the agent is authorized to access the service based on policy
      */
-    private boolean validateRobotOperationWithOPA(String agentName, SecurityContext context) {
+    private boolean validateServiceAccessWithOPA(String agentName, SecurityContext context, String serviceName) {
         try {
             // Get user attributes from Keycloak token
             KeycloakClient.AuthToken token = agentTokens.get(agentName);
             
             if (token == null || token.isExpired()) {
-                logSecurityEvent("OPA_ROBOT_DENIED", agentName + " (no valid token)");
+                logSecurityEvent("OPA_SERVICE_DENIED", agentName + " -> " + serviceName + " (no valid token)");
                 return false;
             }
             
             KeycloakClient.UserAttributes attrs = token.userAttributes;
             
-            // Evaluate robot operation policy with OPA
+            // Evaluate service access policy with OPA
             OPAClient.PolicyDecision decision = opaClient.evaluateCommunicationPolicy(
                 agentName, attrs.org, attrs.role, attrs.trustScore, attrs.status,
-                "RobotOperationService", "main", "active", "robot_operation"
+                serviceName + "Service", "main", "service", 1.0, "active", serviceName
             );
             
+            // Print detailed OPA policy evaluation box
+            System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
+            System.out.println("│  " + (decision.allowed ? "✅ ALLOWED" : "❌ DENIED"));
+            System.out.println("│  Time:        " + java.time.Instant.now());
+            System.out.println("│  From:        " + agentName + " (" + attrs.org + ")");
+            System.out.println("│  To:          " + serviceName + "Service");
+            System.out.println("│  Action:      " + serviceName);
+            System.out.println("│  Role:        " + attrs.role);
+            System.out.println("│  Trust Score: " + attrs.trustScore);
+            System.out.println("│  Status:      " + attrs.status);
+            System.out.println("│  Reason:      " + decision.reason);
+            System.out.println("└──────────────────────────────────────────────────");
+            
             if (decision.allowed) {
-                logSecurityEvent("OPA_ROBOT_ALLOWED", agentName + " (robot operation authorized)");
+                logSecurityEvent("OPA_SERVICE_ALLOWED", agentName + " -> " + serviceName + " (authorized)");
             } else {
-                logSecurityEvent("OPA_ROBOT_DENIED", agentName + " (" + decision.reason + ")");
+                logSecurityEvent("OPA_SERVICE_DENIED", agentName + " -> " + serviceName + " (" + decision.reason + ")");
             }
             
             return decision.allowed;
             
         } catch (Exception e) {
-            logSecurityEvent("OPA_ROBOT_ERROR", agentName + " - " + e.getMessage());
-            System.err.println("❌ Error during OPA robot operation validation: " + e.getMessage());
+            logSecurityEvent("OPA_SERVICE_ERROR", agentName + " -> " + serviceName + " - " + e.getMessage());
+            System.err.println("❌ Error during OPA service validation: " + e.getMessage());
             return false; // Fail secure
         }
     }
@@ -281,6 +295,85 @@ public class FederationSecurityManager {
         } catch (Exception e) {
             logSecurityEvent("MSG_ERROR", sourceAgent + " -> " + targetAgent + " - " + e.getMessage());
             System.err.println("❌ Error validating message: " + e.getMessage());
+            return false; // Fail secure
+        }
+    }
+    
+    /**
+     * Check if two agents can communicate with each other
+     * Uses OPA policy to validate peer-to-peer communication
+     * 
+     * @param sourceAgent Source agent name
+     * @param targetAgent Target agent name
+     * @return true if OPA allows communication between the agents
+     */
+    public boolean canCommunicateWith(String sourceAgent, String targetAgent) {
+        try {
+            // Whitelist for system/infrastructure agents
+            if (validator.isSystemAgent(sourceAgent) || validator.isSystemAgent(targetAgent)) {
+                return true; // Allow system agents to communicate freely
+            }
+            
+            // If OPA is enabled, check with OPA policy
+            if (opaEnabled) {
+                // Get tokens for both agents
+                KeycloakClient.AuthToken sourceToken = agentTokens.get(sourceAgent);
+                KeycloakClient.AuthToken targetToken = agentTokens.get(targetAgent);
+                
+                // If either token is missing or expired, deny communication
+                if (sourceToken == null || sourceToken.isExpired() || 
+                    targetToken == null || targetToken.isExpired()) {
+                    logSecurityEvent("PEER_COMM_DENIED", sourceAgent + " -> " + targetAgent + " (Invalid/expired tokens)");
+                    return false;
+                }
+                
+                // Get user attributes
+                KeycloakClient.UserAttributes sourceAttrs = sourceToken.userAttributes;
+                KeycloakClient.UserAttributes targetAttrs = targetToken.userAttributes;
+                
+                // Evaluate peer communication policy with OPA
+                OPAClient.PolicyDecision decision = opaClient.evaluateCommunicationPolicy(
+                    sourceAgent, sourceAttrs.org, sourceAttrs.role, sourceAttrs.trustScore, sourceAttrs.status,
+                    targetAgent, targetAttrs.org, targetAttrs.role, targetAttrs.trustScore, targetAttrs.status, "peer_coordination"
+                );
+                
+                // Print detailed OPA policy evaluation box
+                System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
+                System.out.println("│  " + (decision.allowed ? "✅ ALLOWED" : "❌ DENIED"));
+                System.out.println("│  Time:        " + java.time.Instant.now());
+                System.out.println("│  From:        " + sourceAgent + " (" + sourceAttrs.org + ")");
+                System.out.println("│  To:          " + targetAgent + " (" + targetAttrs.org + ")");
+                System.out.println("│  Action:      peer_coordination");
+                System.out.println("│  Role:        " + sourceAttrs.role);
+                System.out.println("│  Trust Score: " + sourceAttrs.trustScore);
+                System.out.println("│  Reason:      " + decision.reason);
+                System.out.println("└──────────────────────────────────────────────────");
+                
+                if (decision.allowed) {
+                    logSecurityEvent("PEER_COMM_ALLOWED", sourceAgent + " -> " + targetAgent + " (OPA authorized)");
+                } else {
+                    logSecurityEvent("PEER_COMM_DENIED", sourceAgent + " -> " + targetAgent + " (" + decision.reason + ")");
+                }
+                
+                return decision.allowed;
+            }
+            
+            // If OPA not enabled, use local validation
+            SecurityContext sourceContext = agentContexts.get(sourceAgent);
+            SecurityContext targetContext = agentContexts.get(targetAgent);
+            
+            if (sourceContext == null || targetContext == null) {
+                return false; // No context, deny communication
+            }
+            
+            SecurityValidator.ValidationResult result = validator.validateCrossCommunication(
+                sourceContext, targetContext);
+            
+            return result.allowed;
+            
+        } catch (Exception e) {
+            logSecurityEvent("PEER_COMM_ERROR", sourceAgent + " -> " + targetAgent + " - " + e.getMessage());
+            System.err.println("❌ Error checking peer communication: " + e.getMessage());
             return false; // Fail secure
         }
     }
@@ -438,18 +531,35 @@ public class FederationSecurityManager {
                 sourceStatus = sourceToken.userAttributes.status;
             }
             
-            // Get target status (default to active for managers in main container)
+            // Get target attributes (including role and trust score)
+            double targetTrustScore = 0.5;
+            String targetRole = "worker";
             String targetStatus = "active";
             KeycloakClient.AuthToken targetToken = agentTokens.get(targetAgent);
             if (targetToken != null && !targetToken.isExpired()) {
+                targetTrustScore = targetToken.userAttributes.trustScore;
+                targetRole = targetToken.userAttributes.role;
                 targetStatus = targetToken.userAttributes.status;
             }
             
             // Evaluate policy with OPA
             OPAClient.PolicyDecision decision = opaClient.evaluateCommunicationPolicy(
                 sourceAgent, sourceContext.companyId, sourceRole, sourceTrustScore, sourceStatus,
-                targetAgent, targetContext.companyId, targetStatus, "send"
+                targetAgent, targetContext.companyId, targetRole, targetTrustScore, targetStatus, "send"
             );
+            
+            // Print detailed OPA policy evaluation box
+            System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
+            System.out.println("│  " + (decision.allowed ? "✅ ALLOWED" : "❌ DENIED"));
+            System.out.println("│  Time:        " + java.time.Instant.now());
+            System.out.println("│  From:        " + sourceAgent + " (" + sourceContext.companyId + ")");
+            System.out.println("│  To:          " + targetAgent + " (" + targetContext.companyId + ")");
+            System.out.println("│  Action:      send (message communication)");
+            System.out.println("│  Role:        " + sourceRole);
+            System.out.println("│  Trust Score: " + sourceTrustScore);
+            System.out.println("│  Status:      " + sourceStatus);
+            System.out.println("│  Reason:      " + decision.reason);
+            System.out.println("└──────────────────────────────────────────────────");
             
             if (!decision.allowed) {
                 logSecurityEvent("OPA_DENIED", sourceAgent + " -> " + targetAgent + " (" + decision.reason + ")");
@@ -508,21 +618,35 @@ public class FederationSecurityManager {
         
         KeycloakClient.AuthToken token = agentTokens.get(agentName);
         if (token == null) {
+            System.err.println("⚠️ No token found for " + agentName);
             return false;
         }
         
         if (token.isExpired()) {
-            System.err.println("⚠️ Token expired for " + agentName);
+            System.err.println("⚠️ Token expired for " + agentName + " - cannot refresh expired token");
             return false;
         }
         
         if (token.needsRefresh()) {
-            System.out.println("🔄 Refreshing token for " + agentName);
+            System.out.println("🔄 Refreshing token for " + agentName + "...");
             KeycloakClient.AuthToken newToken = keycloakClient.refreshToken(token.refreshToken);
             
             if (newToken != null) {
+                // Update token for THIS agent name
                 agentTokens.put(agentName, newToken);
+                
+                // IMPORTANT: Also update token for all aliases that share this token
+                // This ensures linked agents (localName vs authenticatedName) stay in sync
+                String currentTokenId = token.accessToken; // Use as identifier
+                for (Map.Entry<String, KeycloakClient.AuthToken> entry : agentTokens.entrySet()) {
+                    if (entry.getValue().accessToken.equals(currentTokenId)) {
+                        agentTokens.put(entry.getKey(), newToken);
+                        System.out.println("   ↳ Also updated token for linked agent: " + entry.getKey());
+                    }
+                }
+                
                 logSecurityEvent("TOKEN_REFRESHED", agentName);
+                System.out.println("✅ Token refreshed successfully for " + agentName);
                 return true;
             } else {
                 System.err.println("❌ Failed to refresh token for " + agentName);
@@ -531,7 +655,7 @@ public class FederationSecurityManager {
             }
         }
         
-        return true;
+        return true; // Token is valid and doesn't need refresh
     }
     
     /**

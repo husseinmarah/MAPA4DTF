@@ -53,7 +53,7 @@ public class OPAClient {
      */
     public PolicyDecision evaluateCommunicationPolicy(
             String senderName, String senderOrg, String senderRole, double senderTrustScore, String senderStatus,
-            String receiverName, String receiverOrg, String receiverStatus, String action) {
+            String receiverName, String receiverOrg, String receiverRole, double receiverTrustScore, String receiverStatus, String action) {
         
         try {
             // Build OPA input JSON
@@ -71,6 +71,8 @@ public class OPAClient {
             JSONObject receiver = new JSONObject();
             receiver.put("name", receiverName);
             receiver.put("org", receiverOrg);
+            receiver.put("role", receiverRole);
+            receiver.put("trustScore", receiverTrustScore);
             receiver.put("status", receiverStatus);
             input.put("receiver", receiver);
             
@@ -164,7 +166,7 @@ public class OPAClient {
         
         return evaluateCommunicationPolicy(
             agentName, agentOrg, agentRole, agentTrustScore, agentStatus,
-            "FederationManager", federationId, "active", "join_federation"
+            "FederationManager", federationId, "federation_manager", 1.0, "active", "join_federation"
         );
     }
     
@@ -185,7 +187,7 @@ public class OPAClient {
         
         return evaluateCommunicationPolicy(
             agentName, agentOrg, agentRole, agentTrustScore, agentStatus,
-            "ResourceManager", "main", "active", "allocate_resource"
+            "ResourceManager", "main", "manager", 1.0, "active", "allocate_resource"
         );
     }
     

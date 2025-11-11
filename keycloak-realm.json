@@ -100,7 +100,7 @@
         "org": ["Stakeholder1_RobotContainer"],
         "role": ["worker"],
         "trustScore": ["0.85"],
-        "status": ["blocked"]
+        "status": ["active"]
       }
     },
     {
@@ -111,7 +111,7 @@
         "org": ["Stakeholder1_RobotContainer"],
         "role": ["worker"],
         "trustScore": ["0.85"],
-        "status": ["blocked"]
+        "status": ["active"]
       }
     },
     {
@@ -133,7 +133,7 @@
         "org": ["Stakeholder2_RobotContainer"],
         "role": ["worker"],
         "trustScore": ["0.9"],
-        "status": ["blocked"]
+        "status": ["active"]
       }
     },
     {

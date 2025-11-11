@@ -131,8 +131,9 @@ public class ProductionAgentManager extends Agent {
         addBehaviour(new AgentRegistrationHandler());
         addBehaviour(new TaskAssignmentHandler());
         addBehaviour(new AcknowledgementHandler());
+        addBehaviour(new TaskCompletionReportHandler()); // NEW: Handle completion reports
         addBehaviour(new HeartbeatMonitor(this, 10000));
-        addBehaviour(new ProductionCoordinationBehaviour(this, 30000));
+        addBehaviour(new ProductionCoordinationBehaviour(this, 3000)); // 3 seconds for very fast task distribution
         
         System.out.println("✅ " + getLocalName() + " ready (Production coordination active)");
     }
@@ -359,6 +360,54 @@ public class ProductionAgentManager extends Agent {
                 
             } catch (Exception e) {
                 System.err.println("[" + myAgent.getLocalName() + "] Error handling acknowledgement: " + e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Handle task completion reports from robots
+     * Tracks which robots have completed tasks and assigns new tasks to idle robots
+     */
+    private class TaskCompletionReportHandler extends CyclicBehaviour {
+        @Override
+        public void action() {
+            MessageTemplate mt = MessageTemplate.and(
+                MessageTemplate.MatchPerformative(ACLMessage.INFORM),
+                MessageTemplate.MatchProtocol("task-completion-report")
+            );
+            
+            ACLMessage msg = receive(mt);
+            if (msg != null) {
+                handleTaskCompletionReport(msg);
+            } else {
+                block();
+            }
+        }
+        
+        private void handleTaskCompletionReport(ACLMessage msg) {
+            try {
+                String content = msg.getContent();
+                AID senderAID = msg.getSender();
+                
+                System.out.println("📋 [" + myAgent.getLocalName() + "] Received task completion report from " + senderAID.getLocalName());
+                
+                // Update agent status
+                AgentStatus status = managedAgents.get(senderAID);
+                if (status != null) {
+                    status.status = "IDLE"; // Robot is now idle and ready for new task
+                    status.lastHeartbeat = System.currentTimeMillis();
+                    status.currentTask = null;
+                    
+                    // Increment task completion counter
+                    Integer completedTasks = (Integer) status.properties.getOrDefault("completedTasks", 0);
+                    status.properties.put("completedTasks", completedTasks + 1);
+                    
+                    System.out.println("✅ [" + myAgent.getLocalName() + "] " + senderAID.getLocalName() + 
+                        " marked as IDLE (Total completed: " + (completedTasks + 1) + ")");
+                }
+                
+            } catch (Exception e) {
+                System.err.println("[" + myAgent.getLocalName() + "] Error handling task completion report: " + e.getMessage());
             }
         }
     }
@@ -693,6 +742,9 @@ public class ProductionAgentManager extends Agent {
             try {
                 System.out.println("[" + myAgent.getLocalName() + "] 🏭 Coordinating production activities...");
                 
+                // NEW: Check and assign tasks to idle robots
+                assignTasksToIdleRobots();
+                
                 // Production coordination logic
                 optimizeTaskAllocation();
                 balanceWorkload();
@@ -700,6 +752,72 @@ public class ProductionAgentManager extends Agent {
                 
             } catch (Exception e) {
                 System.err.println("[" + myAgent.getLocalName() + "] Error in production coordination: " + e.getMessage());
+            }
+        }
+        
+        /**
+         * Assign tasks to idle robots that haven't received tasks recently
+         * This ensures fair distribution and prevents robots from staying idle
+         */
+        private void assignTasksToIdleRobots() {
+            // Find all idle robots
+            List<Map.Entry<AID, AgentStatus>> idleRobots = new ArrayList<>();
+            for (Map.Entry<AID, AgentStatus> entry : managedAgents.entrySet()) {
+                AgentStatus status = entry.getValue();
+                if ("ROBOT".equals(status.agentType) && 
+                    "IDLE".equals(status.status) && 
+                    status.isOnline()) {
+                    idleRobots.add(entry);
+                }
+            }
+            
+            if (idleRobots.isEmpty()) {
+                return; // No idle robots
+            }
+            
+            // Sort by task completion count (prioritize robots with fewer completed tasks)
+            idleRobots.sort((e1, e2) -> {
+                Integer count1 = (Integer) e1.getValue().properties.getOrDefault("completedTasks", 0);
+                Integer count2 = (Integer) e2.getValue().properties.getOrDefault("completedTasks", 0);
+                return count1.compareTo(count2); // Ascending order - robots with fewer tasks first
+            });
+            
+            System.out.println("🤖 [" + myAgent.getLocalName() + "] Found " + idleRobots.size() + " idle robot(s)");
+            
+            // Assign pickup task to each idle robot
+            for (Map.Entry<AID, AgentStatus> entry : idleRobots) {
+                AID robotAID = entry.getKey();
+                AgentStatus status = entry.getValue();
+                Integer completedTasks = (Integer) status.properties.getOrDefault("completedTasks", 0);
+                
+                // Create actual PICKUP task
+                String taskId = "TASK-" + (taskIdCounter++);
+                ProductionTask task = new ProductionTask(taskId, "PICKUP", "MEDIUM");
+                task.parameters.put("operation", "pickup_from_conveyor");
+                task.parameters.put("assigned_by", "ProductionAgentManager");
+                task.assignedAgent = robotAID;
+                activeTasks.put(taskId, task);
+                
+                // Send production command (correct protocol!)
+                ACLMessage taskCmd = new ACLMessage(ACLMessage.REQUEST);
+                taskCmd.addReceiver(robotAID);
+                taskCmd.setProtocol("production-command");
+                taskCmd.setContent(
+                    "(ProductionCommand " +
+                    ":task-id \"" + taskId + "\" " +
+                    ":operation \"PICKUP\" " +
+                    ":priority \"MEDIUM\" " +
+                    ":assigned-time \"" + new java.util.Date() + "\")"
+                );
+                
+                myAgent.send(taskCmd);
+                
+                // Update agent status
+                status.status = "BUSY";
+                status.currentTask = taskId;
+                
+                System.out.println("✅ [" + myAgent.getLocalName() + "] Assigned " + taskId + " (PICKUP) to " + 
+                    robotAID.getLocalName() + " (completed: " + completedTasks + " tasks)");
             }
         }
         

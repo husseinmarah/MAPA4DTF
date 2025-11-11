@@ -342,9 +342,9 @@ def create_pathways(prop):
     app.render()
 
 def OnRun():
-    # TEMPLATE: Replace hardcoded wait time '50' with PathwayArea.opcuaWaitCycles attribute from metamodel
-    # Wait for OPC-UA data
-    for i in range(50):  # 5 seconds max
+    # TEMPLATE: Replace hardcoded wait time '30' with PathwayArea.opcuaWaitCycles attribute from metamodel
+    # Wait for OPC-UA data (reduced from 50 to 30 for faster startup)
+    for i in range(30):  # 3 seconds max
         # TEMPLATE: Replace hardcoded property name 'PathwayProperties' with PathwayArea.opcuaPropertyName attribute from metamodel
         pathway_prop = comp.getProperty('pathwayProperties')
         if pathway_prop and pathway_prop.Value and pathway_prop.Value != "[]":
@@ -416,9 +416,9 @@ def create_conveyors(prop):
     app.render()
 
 def OnRun():
-    # TEMPLATE: Replace hardcoded delay time '1' with OutputConveyor.opcuaDelayTime attribute from metamodel
-    # Wait for OPC-UA data
-    delay(1)
+    # TEMPLATE: Replace hardcoded delay time '0.5' with OutputConveyor.opcuaDelayTime attribute from metamodel
+    # Wait for OPC-UA data (reduced for faster startup)
+    delay(0.5)
     
     # TEMPLATE: Replace hardcoded property name 'output_conveyor_Properties' with OutputConveyor.opcuaPropertyName attribute from metamodel
     # Read the properties from OPC-UA
@@ -591,15 +591,15 @@ def set_conveyor_properties(conveyor, index, product_type, clone_time_interval, 
     prop.Value = index
 
 def OnRun():
-    # TEMPLATE: Replace hardcoded wait time '50' with InputConveyor.opcuaWaitCycles attribute from metamodel
-    # Wait for OPC-UA data with delay loop (following pattern from other components)
-    for i in range(50):  # 5 seconds max
+    # TEMPLATE: Replace hardcoded wait time '30' with InputConveyor.opcuaWaitCycles attribute from metamodel
+    # Wait for OPC-UA data with delay loop (reduced from 50 to 30 for faster startup)
+    for i in range(30):  # 3 seconds max
         # TEMPLATE: Replace hardcoded property name 'Input_Conveyor_Location' with InputConveyor.locationPropertyName attribute from metamodel
         input_location_prop = comp.getProperty('inputconveyorProperties')
         if input_location_prop and input_location_prop.Value and input_location_prop.Value != "[]":
             clone_conveyors()
             break
-        delay(0.1)
+        delay(0.05)
     
     # Main run loop
     while True:
@@ -758,9 +758,9 @@ def create_idles(prop):
     app.render()
 
 def OnRun():
-    # TEMPLATE: Replace hardcoded wait time '50' with IdleLocation.opcuaWaitCycles attribute from metamodel
-    # Wait for OPC-UA data
-    for i in range(50):  # 5 seconds max
+    # TEMPLATE: Replace hardcoded wait time '30' with IdleLocation.opcuaWaitCycles attribute from metamodel
+    # Wait for OPC-UA data (reduced from 50 to 30 for faster startup)
+    for i in range(30):  # 3 seconds max
         # TEMPLATE: Replace hardcoded property name 'idleProperties' with IdleLocation.opcuaPropertyName attribute from metamodel
         idle_prop = comp.getProperty('idleProperties')
         if idle_prop and idle_prop.Value and idle_prop.Value != "[]":
@@ -2489,8 +2489,8 @@ def find_shortest_path_with_reservations(start, goal, pathways, robot_index):
 def OnRun():
     global robots, robot_states, comp, app, sim
 
-    # Wait for RobotQuantity to be set
-    for i in range(50):  # 5 seconds max
+    # Wait for RobotQuantity to be set (reduced from 50 to 30 for faster startup)
+    for i in range(30):  # 3 seconds max
         robot_quantity_prop = comp.getProperty('RobotQuantity')
         if robot_quantity_prop and robot_quantity_prop.Value > 0:
             clone_robots()
@@ -2500,7 +2500,7 @@ def OnRun():
     if not robots:
         return
 
-    delay(2)
+    delay(0.5)  # Reduced for faster startup
 
     # Fetch all pathways from the 3D world
     all_components = app.Components

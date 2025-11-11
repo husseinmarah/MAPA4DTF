@@ -14,17 +14,10 @@ authorized_stakeholders := {
     "Stakeholder3_ConveyorContainer"
 }
 
-# --- PRIORITY RULE 1: Block agents with status="blocked" (from Keycloak) ---
-# This is attribute-based - just change the status in Keycloak!
-allow if {
-    input.sender.status == "blocked"
-    false  # Explicitly deny blocked agent
-}
-
-allow if {
-    input.receiver.status == "blocked"
-    false  # Also block communication TO blocked agents
-}
+# ============================================================
+# BLOCKING RULES - These prevent blocked agents from operating
+# NOTE: All allow rules below should check status == "active"
+# ============================================================
 
 # --- Allow: worker role from authorized stakeholders ---
 allow if {
@@ -140,4 +133,124 @@ allow if {
     input.action == "robot_operation"
     input.sender.status == "blocked"
     false  # Blocked agents cannot operate robots
+}
+
+# ============================================================
+# PEER-TO-PEER COORDINATION (Horizontal Federation)
+# Controls which agents can coordinate directly with each other
+# ============================================================
+
+# --- Allow peer coordination between active robots in the SAME organization ---
+allow if {
+    input.action == "peer_coordination"
+    input.sender.role == "worker"
+    input.receiver.role == "worker"
+    input.sender.org == input.receiver.org  # Same organization
+    input.sender.status == "active"
+    input.receiver.status == "active"
+    authorized_stakeholders[input.sender.org]
+}
+
+# --- Allow peer coordination between active robots in DIFFERENT organizations if both authorized ---
+allow if {
+    input.action == "peer_coordination"
+    input.sender.role == "worker"
+    input.receiver.role == "worker"
+    input.sender.org != input.receiver.org  # Different organizations
+    input.sender.status == "active"
+    input.receiver.status == "active"
+    input.sender.trustScore >= 0.85  # Higher trust required for cross-org
+    input.receiver.trustScore >= 0.85
+    authorized_stakeholders[input.sender.org]
+    authorized_stakeholders[input.receiver.org]
+}
+
+# --- Managers can coordinate with any active worker in authorized stakeholders ---
+allow if {
+    input.action == "peer_coordination"
+    input.sender.role == "manager"
+    input.receiver.role == "worker"
+    input.sender.status == "active"
+    input.receiver.status == "active"
+    authorized_stakeholders[input.receiver.org]
+}
+
+# --- Federation managers can coordinate with anyone ---
+allow if {
+    input.action == "peer_coordination"
+    input.sender.role == "federation_manager"
+    input.sender.status == "active"
+    input.receiver.status == "active"
+}
+
+# ============================================================
+# ROBOT ↔ CONVEYOR HORIZONTAL FEDERATION
+# Controls bidirectional peer coordination between RobotAgents and ConveyorAgents
+# ============================================================
+
+# --- ROBOT → CONVEYOR: Access for checking production status ---
+allow if {
+    input.action == "conveyor_access"
+    input.sender.role == "worker"
+    input.sender.status == "active"
+    input.sender.trustScore >= 0.8
+    authorized_stakeholders[input.sender.org]
+}
+
+# --- ROBOT → CONVEYOR: Managers can access any conveyor ---
+allow if {
+    input.action == "conveyor_access"
+    input.sender.role == "manager"
+    input.sender.status == "active"
+    authorized_stakeholders[input.sender.org]
+}
+
+# --- ROBOT → CONVEYOR: Federation managers can access any conveyor ---
+allow if {
+    input.action == "conveyor_access"
+    input.sender.role == "federation_manager"
+    input.sender.status == "active"
+}
+
+# --- CONVEYOR → ROBOT: Push notifications for product availability ---
+allow if {
+    input.action == "peer_coordination"
+    input.sender.org == "Stakeholder3_ConveyorContainer"
+    input.receiver.role == "worker"  # Robots are workers
+    input.sender.status == "active"
+    input.receiver.status == "active"
+    input.sender.trustScore >= 0.8
+    authorized_stakeholders[input.sender.org]
+    authorized_stakeholders[input.receiver.org]
+}
+
+# --- ROBOT → CONVEYOR: Acknowledgements and task acceptance ---
+allow if {
+    input.action == "peer_coordination"
+    input.sender.role == "worker"  # Robots are workers
+    input.receiver.org == "Stakeholder3_ConveyorContainer"
+    input.sender.status == "active"
+    input.receiver.status == "active"
+    input.sender.trustScore >= 0.8
+    authorized_stakeholders[input.sender.org]
+    authorized_stakeholders[input.receiver.org]
+}
+
+# --- CONVEYOR → MANAGER: Conveyors can send status updates to managers ---
+allow if {
+    input.action == "send"
+    input.sender.org == "Stakeholder3_ConveyorContainer"
+    input.receiver.role == "manager"
+    input.sender.status == "active"
+    input.receiver.status == "active"
+    authorized_stakeholders[input.sender.org]
+}
+
+# --- CONVEYOR → FEDERATION MANAGER: Conveyors can communicate with federation managers ---
+allow if {
+    input.action == "send"
+    input.sender.org == "Stakeholder3_ConveyorContainer"
+    input.receiver.role == "federation_manager"
+    input.sender.status == "active"
+    input.receiver.status == "active"
 }

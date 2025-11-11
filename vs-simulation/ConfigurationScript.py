@@ -63,7 +63,7 @@ raw_components = r'''
                 "default": "Component"},{
                 "name_template": "clonetimeInterval",
                 "type": "number",
-                "default": 160},{
+                "default": 80},{
                 "name_template": "cloneCount",
                 "type": "number",
                 "default": 0},],
