@@ -2547,6 +2547,12 @@ def OnRun():
     while True:
         for robot in robots:
             robot_index = get_robot_index(robot.Name)
+            
+            # Check if robot is enabled - skip disabled robots
+            robot_enabled = get_robot_property_value('Enabled', robot_index)
+            if not robot_enabled:
+                continue  # Skip this robot entirely if not enabled
+            
             vehicle = robot_states[robot_index]['vehicle']
 
             if not robot_states[robot_index]['moving']:
@@ -2706,6 +2712,13 @@ def OnRun():
 
 def move_robot_incremental(robot, vehicle, robot_index, robot_state):
     """Smooth robot movement - prevents teleporting and freezing"""
+    
+    # Check if robot is enabled - stop movement if disabled
+    robot_enabled = get_robot_property_value('Enabled', robot_index)
+    if not robot_enabled:
+        robot_state['moving'] = False
+        return
+    
     if not robot_state['moving'] or not vehicle:
         return
 
