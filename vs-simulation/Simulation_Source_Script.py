@@ -2071,11 +2071,17 @@ def check_proximity(robot, robot_index):
     if not should_stop:
         robot_moving = robot_index in robot_states and robot_states[robot_index]['moving']
         
-        # Detection zones with stricter collision prevention
+        # Detection zones with velocity-aware collision prevention
         early_detection_zone = 5000   # Early warning for proactive avoidance
         coordination_zone = 3500      # Start coordination earlier
         critical_zone = 1800 if not in_transition_zone else 2200  # Stricter minimum separation
-        minimum_separation = 1200  # Absolute minimum distance between robots
+        # Dynamic minimum separation based on speed
+        base_minimum_separation = 1000
+        speed_factor = 1.0
+        if robot_index in robot_states and robot_states[robot_index]['vehicle']:
+            current_speed = robot_states[robot_index]['vehicle'].MaxSpeed
+            speed_factor = current_speed / 1200.0  # Normalize to base speed
+        minimum_separation = base_minimum_separation * (0.8 + 0.4 * speed_factor)  # 800-1200 range
         
         for other_robot in robots:
             if other_robot != robot:
@@ -2115,15 +2121,26 @@ def check_proximity(robot, robot_index):
                                 self_priority = get_robot_property_value('Priority', robot_index)
                                 other_priority = get_robot_property_value('Priority', other_robot_index)
                                 
-                                # CRITICAL ZONE - immediate action for head-on collision
+                                # CRITICAL ZONE - use smarter yielding based on multiple factors
                                 if dist < critical_zone:
-                                    if self_priority >= other_priority:
-                                        should_stop = True
-                                        robot_states[robot_index]['coordinate_side_by_side'] = True
-                                        robot_states[robot_index]['coordination_partner'] = other_robot_index
-                                        break
+                                    # Yield if: higher priority robot is closer to destination OR equal priority with higher index
+                                    should_yield = False
+                                    if self_priority > other_priority:
+                                        should_yield = True
+                                    elif self_priority == other_priority and robot_index > other_robot_index:
+                                        should_yield = True
+                                    
+                                    if should_yield:
+                                        # Slow down significantly but don't full stop unless very close
+                                        if dist < critical_zone * 0.7:  # Within 70% of critical zone
+                                            should_stop = True
+                                            robot_states[robot_index]['coordinate_side_by_side'] = True
+                                            robot_states[robot_index]['coordination_partner'] = other_robot_index
+                                            break
+                                        else:
+                                            speed_reduction = 0.3  # Very slow but keep moving
                                 
-                                # COORDINATION ZONE - start coordinated avoidance
+                                # COORDINATION ZONE - start coordinated avoidance with timeout
                                 elif dist < coordination_zone:
                                     if not robot_states[robot_index].get('in_coordination', False):
                                         robot_states[robot_index]['coordinate_side_by_side'] = True
@@ -2138,6 +2155,12 @@ def check_proximity(robot, robot_index):
                                             robot_states[other_robot_index]['in_coordination'] = True
                                             robot_states[other_robot_index]['coordination_start_time'] = sim.SimTime
                                             robot_states[other_robot_index]['vehicle_initialized'] = False
+                                    else:
+                                        # Exit coordination mode after 5 seconds to avoid getting stuck
+                                        coordination_duration = sim.SimTime - robot_states[robot_index]['coordination_start_time']
+                                        if coordination_duration > 5.0:
+                                            robot_states[robot_index]['in_coordination'] = False
+                                            robot_states[robot_index]['coordinate_side_by_side'] = False
                                     
                                     # Speed reduction for head-on scenarios
                                     speed_reduction = 0.5  # Stronger reduction for head-on collisions
@@ -2153,11 +2176,21 @@ def check_proximity(robot, robot_index):
                                 other_priority = get_robot_property_value('Priority', other_robot_index)
                                 
                                 if dist < critical_zone:
-                                    if self_priority >= other_priority:
-                                        should_stop = True
-                                        robot_states[robot_index]['coordinate_side_by_side'] = True
-                                        robot_states[robot_index]['coordination_partner'] = other_robot_index
-                                        break
+                                    # Use same smart yielding logic for side-by-side
+                                    should_yield = False
+                                    if self_priority > other_priority:
+                                        should_yield = True
+                                    elif self_priority == other_priority and robot_index > other_robot_index:
+                                        should_yield = True
+                                    
+                                    if should_yield:
+                                        if dist < critical_zone * 0.7:
+                                            should_stop = True
+                                            robot_states[robot_index]['coordinate_side_by_side'] = True
+                                            robot_states[robot_index]['coordination_partner'] = other_robot_index
+                                            break
+                                        else:
+                                            speed_reduction = 0.4  # Slow but moving
                                 elif dist < coordination_zone:
                                     if not robot_states[robot_index].get('in_coordination', False):
                                         robot_states[robot_index]['coordinate_side_by_side'] = True
@@ -2172,6 +2205,12 @@ def check_proximity(robot, robot_index):
                                             robot_states[other_robot_index]['in_coordination'] = True
                                             robot_states[other_robot_index]['coordination_start_time'] = sim.SimTime
                                             robot_states[other_robot_index]['vehicle_initialized'] = False
+                                    else:
+                                        # Exit coordination mode after 5 seconds
+                                        coordination_duration = sim.SimTime - robot_states[robot_index]['coordination_start_time']
+                                        if coordination_duration > 5.0:
+                                            robot_states[robot_index]['in_coordination'] = False
+                                            robot_states[robot_index]['coordinate_side_by_side'] = False
                                     
                                     speed_reduction = 0.6
                                 elif dist < early_detection_zone:
@@ -2211,14 +2250,30 @@ def check_proximity(robot, robot_index):
         else:
             deadlock_duration = current_time - deadlock['deadlock_start_time']
             
-            # Force resolution after 5 seconds using time-based alternating
-            if deadlock_duration > 5.0:
-                time_slot = int(current_time) % 2
-                if (robot_index % 2 == time_slot):
-                    # This robot's turn to force movement
+            # Force resolution after 3 seconds (reduced from 5) with smarter logic
+            if deadlock_duration > 3.0:
+                # Use robot index priority - lower index moves first
+                # This creates deterministic resolution without time slots
+                # Find if there are other robots also in deadlock nearby
+                other_deadlocked = []
+                for other_robot in robots:
+                    if other_robot != robot:
+                        other_index = get_robot_index(other_robot.Name)
+                        if other_index in robot_states:
+                            other_deadlock = robot_states[other_index]['deadlock_detection']
+                            if other_deadlock['in_potential_deadlock']:
+                                other_pos = getRobotPosition(other_robot)
+                                dist = vector_length(vector_subtract(robot_pos, other_pos))
+                                if dist < 3000:  # Within proximity
+                                    other_deadlocked.append(other_index)
+                
+                # If this robot has lowest index among deadlocked robots, it moves
+                if not other_deadlocked or robot_index < min(other_deadlocked):
                     should_stop = False
-                    speed_reduction = 0.4  # Move slowly to avoid collision
-                    print("DEADLOCK RESOLUTION: Robot " + str(robot_index) + " forcing movement")
+                    speed_reduction = 0.3  # Very slow movement to break deadlock
+                    # Only print occasionally to avoid spam
+                    if int(deadlock_duration * 10) % 20 == 0:  # Every 2 seconds after threshold
+                        print("Robot " + str(robot_index) + " resolving deadlock (priority movement)")
     else:
         # Reset deadlock detection when not stopped
         if robot_index in robot_states and robot_states[robot_index]['deadlock_detection']['in_potential_deadlock']:
