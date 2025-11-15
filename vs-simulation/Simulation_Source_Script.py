@@ -2068,32 +2068,48 @@ def check_proximity(robot, robot_index):
                 should_stop = True
 
     # ENHANCED head-on collision detection with improved direction analysis
+    robot_moving = robot_index in robot_states and robot_states[robot_index]['moving']
+    
+    # Detection zones with velocity-aware collision prevention
+    early_detection_zone = 5000   # Early warning for proactive avoidance
+    coordination_zone = 3500      # Start coordination earlier
+    critical_zone = 1800 if not in_transition_zone else 2200  # Stricter minimum separation
+    # CRITICAL: Increased minimum separation to prevent collisions
+    base_minimum_separation = 1500  # Increased from 1000
+    speed_factor = 1.0
+    if robot_index in robot_states and robot_states[robot_index]['vehicle']:
+        current_speed = robot_states[robot_index]['vehicle'].MaxSpeed
+        speed_factor = current_speed / 1200.0  # Normalize to base speed
+    minimum_separation = base_minimum_separation * (0.9 + 0.3 * speed_factor)  # 1350-1800 range
+    
+    # CRITICAL: Check minimum separation for ALL robots (moving or not) - moved outside should_stop check
+    for other_robot in robots:
+        if other_robot != robot:
+            other_robot_index = get_robot_index(other_robot.Name)
+            other_pos = getRobotPosition(other_robot)
+            dist = vector_length(vector_subtract(robot_pos, other_pos))
+            
+            # Enforce absolute minimum separation - ALWAYS check regardless of should_stop state
+            if dist < minimum_separation:
+                # Use priority to determine who stops (lower priority stops)
+                self_priority = get_robot_property_value('Priority', robot_index)
+                other_priority = get_robot_property_value('Priority', other_robot_index)
+                # If equal priority, higher index stops
+                if self_priority > other_priority or (self_priority == other_priority and robot_index > other_robot_index):
+                    should_stop = True
+                    break
+                elif self_priority < other_priority or (self_priority == other_priority and robot_index < other_robot_index):
+                    # This robot has priority - slow down but keep moving
+                    speed_reduction = min(speed_reduction, 0.3)
+                    break
+    
     if not should_stop:
-        robot_moving = robot_index in robot_states and robot_states[robot_index]['moving']
-        
-        # Detection zones with velocity-aware collision prevention
-        early_detection_zone = 5000   # Early warning for proactive avoidance
-        coordination_zone = 3500      # Start coordination earlier
-        critical_zone = 1800 if not in_transition_zone else 2200  # Stricter minimum separation
-        # Dynamic minimum separation based on speed
-        base_minimum_separation = 1000
-        speed_factor = 1.0
-        if robot_index in robot_states and robot_states[robot_index]['vehicle']:
-            current_speed = robot_states[robot_index]['vehicle'].MaxSpeed
-            speed_factor = current_speed / 1200.0  # Normalize to base speed
-        minimum_separation = base_minimum_separation * (0.8 + 0.4 * speed_factor)  # 800-1200 range
-        
         for other_robot in robots:
             if other_robot != robot:
                 other_robot_index = get_robot_index(other_robot.Name)
                 other_pos = getRobotPosition(other_robot)
                 dist = vector_length(vector_subtract(robot_pos, other_pos))
                 other_moving = other_robot_index in robot_states and robot_states[other_robot_index]['moving']
-                
-                # Enforce absolute minimum separation
-                if dist < minimum_separation:
-                    should_stop = True
-                    break
                 
                 if robot_moving and other_moving and dist < early_detection_zone:
                     # Enhanced direction calculation for better head-on detection
@@ -2117,7 +2133,7 @@ def check_proximity(robot, robot_index):
                             dot_product = self_direction.X * other_direction.X + self_direction.Y * other_direction.Y
                             
                             # If robots are moving in nearly opposite directions (head-on collision)
-                            if dot_product < -0.5:  # Strong opposite direction indicator
+                            if dot_product < -0.3:  # Tighter threshold for earlier head-on detection
                                 self_priority = get_robot_property_value('Priority', robot_index)
                                 other_priority = get_robot_property_value('Priority', other_robot_index)
                                 
@@ -2131,14 +2147,14 @@ def check_proximity(robot, robot_index):
                                         should_yield = True
                                     
                                     if should_yield:
-                                        # Slow down significantly but don't full stop unless very close
-                                        if dist < critical_zone * 0.7:  # Within 70% of critical zone
+                                        # Stop if within critical zone, otherwise crawl very slowly
+                                        if dist < critical_zone * 0.85:  # Within 85% of critical zone - stop
                                             should_stop = True
                                             robot_states[robot_index]['coordinate_side_by_side'] = True
                                             robot_states[robot_index]['coordination_partner'] = other_robot_index
                                             break
                                         else:
-                                            speed_reduction = 0.3  # Very slow but keep moving
+                                            speed_reduction = 0.2  # Extremely slow crawl
                                 
                                 # COORDINATION ZONE - start coordinated avoidance with timeout
                                 elif dist < coordination_zone:
@@ -2162,8 +2178,8 @@ def check_proximity(robot, robot_index):
                                             robot_states[robot_index]['in_coordination'] = False
                                             robot_states[robot_index]['coordinate_side_by_side'] = False
                                     
-                                    # Speed reduction for head-on scenarios
-                                    speed_reduction = 0.5  # Stronger reduction for head-on collisions
+                                    # Speed reduction for head-on scenarios - very aggressive
+                                    speed_reduction = 0.35  # Much stronger reduction for head-on collisions
                                 
                                 # EARLY DETECTION ZONE - early speed reduction for head-on
                                 elif dist < early_detection_zone:
@@ -2184,13 +2200,13 @@ def check_proximity(robot, robot_index):
                                         should_yield = True
                                     
                                     if should_yield:
-                                        if dist < critical_zone * 0.7:
+                                        if dist < critical_zone * 0.85:  # Within 85% - stop
                                             should_stop = True
                                             robot_states[robot_index]['coordinate_side_by_side'] = True
                                             robot_states[robot_index]['coordination_partner'] = other_robot_index
                                             break
                                         else:
-                                            speed_reduction = 0.4  # Slow but moving
+                                            speed_reduction = 0.25  # Very slow
                                 elif dist < coordination_zone:
                                     if not robot_states[robot_index].get('in_coordination', False):
                                         robot_states[robot_index]['coordinate_side_by_side'] = True
@@ -2212,10 +2228,10 @@ def check_proximity(robot, robot_index):
                                             robot_states[robot_index]['in_coordination'] = False
                                             robot_states[robot_index]['coordinate_side_by_side'] = False
                                     
-                                    speed_reduction = 0.6
+                                    speed_reduction = 0.5  # More conservative for side-by-side
                                 elif dist < early_detection_zone:
                                     if not robot_states[robot_index].get('in_coordination', False):
-                                        speed_reduction = 0.8
+                                        speed_reduction = 0.75  # Earlier slowdown
                 
                 # Handle stationary robots
                 elif robot_moving and not other_moving and dist < 2500:
@@ -2232,12 +2248,15 @@ def check_proximity(robot, robot_index):
                                     break
                                 else:
                                     robot_states[robot_index]['bypass_target'] = other_robot_index
+                                    speed_reduction = 0.4  # Slow down even when bypassing
+                            elif dist < critical_zone * 1.3:  # Extended zone for stationary robots
+                                speed_reduction = 0.5  # Slow down when approaching stationary robot
                             else:
                                 # Only reduce speed when approaching conveyors or stationary robots
                                 if approaching_conveyor:
                                     speed_reduction = 0.6  # Reduce speed when approaching conveyor
                                 else:
-                                    speed_reduction = 0.8  # Normal reduction for stationary robots
+                                    speed_reduction = 0.75  # Earlier reduction for stationary robots
 
     # Deadlock resolution: Check if robot has been stopped too long
     if should_stop and robot_index in robot_states:
@@ -2274,12 +2293,16 @@ def check_proximity(robot, robot_index):
                     # Only print occasionally to avoid spam
                     if int(deadlock_duration * 10) % 20 == 0:  # Every 2 seconds after threshold
                         print("Robot " + str(robot_index) + " resolving deadlock (priority movement)")
+                    # Reset deadlock state after breaking free
+                    robot_states[robot_index]['deadlock_detection']['in_potential_deadlock'] = False
+                    robot_states[robot_index]['deadlock_detection']['deadlock_start_time'] = 0
     else:
         # Reset deadlock detection when not stopped
         if robot_index in robot_states and robot_states[robot_index]['deadlock_detection']['in_potential_deadlock']:
             robot_states[robot_index]['deadlock_detection']['in_potential_deadlock'] = False
+            robot_states[robot_index]['deadlock_detection']['deadlock_start_time'] = 0
     
-    # Calculate adaptive speed with congestion awareness
+    # Calculate adaptive speed with congestion awareness and ENFORCE it
     if robot_index in robot_states and robot_states[robot_index]['vehicle']:
         vehicle = robot_states[robot_index]['vehicle']
         base_speed = 1200.0
@@ -2303,12 +2326,13 @@ def check_proximity(robot, robot_index):
         # Apply all speed factors
         final_speed_factor = min(speed_reduction, congestion_factor)
         
-        if approaching_conveyor or final_speed_factor < 1.0:
-            new_speed = base_speed * final_speed_factor
-            if vehicle.MaxSpeed != new_speed:
-                vehicle.MaxSpeed = new_speed
-        elif vehicle.MaxSpeed != base_speed:
-            vehicle.MaxSpeed = base_speed
+        # ALWAYS enforce speed changes (removed conditional)
+        new_speed = base_speed * final_speed_factor
+        if vehicle.MaxSpeed != new_speed:
+            vehicle.MaxSpeed = new_speed
+            # Force vehicle to respect speed change immediately
+            if hasattr(vehicle, 'Speed'):
+                vehicle.Speed = min(vehicle.Speed, new_speed)
     
     set_robot_property('Stop', should_stop, robot_index)
 
@@ -2528,58 +2552,36 @@ def find_shortest_path_with_reservations(start, goal, pathways, robot_index):
     def get_neighbors(current):
         neighbors = []
         for p in pathways:
-            if p != current and distance(current, p) <= 12000:
+            # Improved neighbor detection - consider pathways within reasonable distance
+            if p != current and distance(current, p) <= 15000:  # Increased range for better connectivity
                 # Check if pathway can be reserved
                 if is_pathway_available(p['Name'], robot_index):
-                    # PROACTIVE: Also check if other robots are planning to use this pathway
-                    conflict_predicted = False
-                    
-                    # Check if other robots have this pathway in their planned paths
-                    for other_robot_index, planned_path in robot_planned_paths.items():
-                        if other_robot_index != robot_index:
-                            for planned_pathway in planned_path:
-                                planned_name = planned_pathway.Name if hasattr(planned_pathway, 'Name') else planned_pathway
-                                if planned_name == p['Name']:
-                                    # Check timing - if other robot will be here soon, avoid
-                                    other_robot = next((r for r in robots if get_robot_index(r.Name) == other_robot_index), None)
-                                    if other_robot:
-                                        other_pos = getRobotPosition(other_robot)
-                                        pathway_pos = {'X': p['X'], 'Y': p['Y']}
-                                        distance_to_pathway = distance(
-                                            {'X': other_pos.X, 'Y': other_pos.Y}, 
-                                            pathway_pos
-                                        )
-                                        # If other robot is close to this pathway, avoid conflict
-                                        if distance_to_pathway < 2000:
-                                            conflict_predicted = True
-                                            break
-                    
-                    if not conflict_predicted:
-                        neighbors.append(p)
+                    neighbors.append(p)
         return neighbors
 
     def calculate_path_cost(current, neighbor):
-        # Calculate cost with collision avoidance factors
+        # Calculate cost - prioritize shortest path with minimal penalties
         base_cost = distance(current, neighbor)
         
-        # Add penalty for pathways with high robot density
+        # Minimal penalty for currently occupied pathways only
         density_penalty = 0
         neighbor_pos = {'X': neighbor['X'], 'Y': neighbor['Y']}
         
         for robot in robots:
             robot_pos = getRobotPosition(robot)
             robot_dict_pos = {'X': robot_pos.X, 'Y': robot_pos.Y}
-            if distance(neighbor_pos, robot_dict_pos) < 2000:
-                density_penalty += 500  # Penalty for crowded areas
+            # Only penalize if robot is RIGHT on the pathway (reduced penalty and distance)
+            if distance(neighbor_pos, robot_dict_pos) < 1000:
+                density_penalty += 200  # Reduced penalty
         
-        # Add penalty for pathways that other robots are targeting
+        # Minimal penalty for contested pathways
         target_penalty = 0
         for other_robot in robots:
             other_robot_index = get_robot_index(other_robot.Name)
             if other_robot_index != robot_index:
                 other_next_location = get_robot_property_value('NextLocation', other_robot_index)
                 if other_next_location == neighbor['Name']:
-                    target_penalty += 1000  # High penalty for contested pathways
+                    target_penalty += 300  # Reduced penalty - let collision avoidance handle it
         
         return base_cost + density_penalty + target_penalty
 
@@ -3056,11 +3058,11 @@ def move_robot_incremental(robot, vehicle, robot_index, robot_state):
         # Calculate the planned exit point for this pathway
         planned_exit_point, _ = calculate_smart_entry_exit_points(robot_pos, current_pathway, next_pathway)
         
-        # Only allow transition if robot is VERY close to the planned exit point
+        # Allow transition when robot is reasonably close to exit point (more lenient)
         distance_to_exit = vector_length(vector_subtract(robot_pos, planned_exit_point))
         
-        # Strict transition criteria - robot must be at the exit point
-        if distance_to_exit < 800:  # Must be within 800 units of exit point
+        # More lenient transition criteria for smoother navigation
+        if distance_to_exit < 1200:  # Increased from 800 to 1200 units
             if next_in_pathway:
                 can_transition_direct = True
             else:
