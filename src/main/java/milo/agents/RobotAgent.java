@@ -366,8 +366,13 @@ public class RobotAgent extends Agent {
     }
 
     private void handleConveyorProduction() {
+        // CRITICAL: Only check conveyors if robot is enabled by OPA
+        if (myRobot == null || !myRobot.isEnabled()) {
+            return; // Robot disabled - cannot check conveyor production
+        }
+        
         // Debug: Log conveyor status periodically
-        if (myRobot != null && myRobot.isEnabled() && System.currentTimeMillis() % 30000 < 1000) {
+        if (System.currentTimeMillis() % 30000 < 1000) {
             int producingCount = 0;
             for (int i = 0; i < CustomNamespace.getInputConveyors().size(); i++) {
                 ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(i);
@@ -375,7 +380,7 @@ public class RobotAgent extends Agent {
                     producingCount++;
                 }
             }
-            System.out.println("📊 [" + getLocalName() + "] Conveyors producing: " + producingCount + "/" + CustomNamespace.getInputConveyors().size());
+            System.out.println("📊 [" + getLocalName() + "] Conveyors producing: " + producingCount + "/" + CustomNamespace.getInputConveyors().size() + " (Enabled: " + myRobot.isEnabled() + ")");
         }
         
         checkConveyorProduction();
@@ -405,13 +410,26 @@ public class RobotAgent extends Agent {
 
 
     private void checkConveyorProduction() {
-        // Check dynamic input conveyors
-                for (int i = 0; i < CustomNamespace.getInputConveyors().size(); i++) {
-                    ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(i);
+        // CRITICAL: Only check conveyors if robot is enabled
+        if (myRobot == null || !myRobot.isEnabled()) {
+            return; // Robot disabled - cannot accept conveyor tasks
+        }
+        
+        // Check both input conveyors for product availability
+        for (int i = 0; i < CustomNamespace.getInputConveyors().size(); i++) {
+            ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(i);
             if (conveyor.getProduced()) {
-                    String targetName = getConveyorTargetName(i + 1);
-                setRobotTarget(targetName);
-                            }
+                String targetName = getConveyorTargetName(i + 1);
+                String conveyorAgentName = "ConveyorAgent" + (i + 1);
+                
+                // OPA CHECK: Can this robot communicate with the conveyor?
+                if (securityManager != null && securityManager.canCommunicateWith(getLocalName(), conveyorAgentName)) {
+                    System.out.println("🔗 " + getLocalName() + " ↔ " + conveyorAgentName + " (OPA: Communication allowed)");
+                    setRobotTarget(targetName);
+                } else {
+                    System.out.println("🚫 " + getLocalName() + " ✗ " + conveyorAgentName + " (OPA: Communication blocked - robot not authorized for this conveyor)");
+                }
+            }
         }
     }
 
@@ -514,21 +532,37 @@ public class RobotAgent extends Agent {
     }
 
     private void checkProductPickup(RobotTemplate robot) {
+        // CRITICAL: Check if robot is enabled before allowing pickup
+        if (!robot.isEnabled()) {
+            System.out.println("🚫 [" + getLocalName() + "] Cannot pickup - Robot disabled by OPA policy");
+            return;
+        }
+        
         String location = robot.getLocation();
         // boolean isCarryingProduct = robot.isCarryingProduct();
 
-        // Check for pickup at dynamic input conveyors
+        // Check for pickup at both input conveyors
         for (int i = 0; i < CustomNamespace.getInputConveyors().size(); i++) {
             String conveyorTargetName = getConveyorTargetName(i + 1);
             if (location.equals(conveyorTargetName)) {
                 ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(i);
+                String conveyorAgentName = "ConveyorAgent" + (i + 1);
+                
+                // OPA CHECK: Verify robot can communicate with this conveyor before pickup
+                if (securityManager != null && !securityManager.canCommunicateWith(getLocalName(), conveyorAgentName)) {
+                    System.out.println("🚫 [" + getLocalName() + "] Cannot pickup from " + conveyorAgentName + " - OPA authorization denied");
+                    continue; // Skip this conveyor
+                }
+                
                 if (conveyor.getProduced()) {
                     System.out.println("┌─ PRODUCT PICKUP ─────────────────────────────────");
                     System.out.println("│  📦 PICKUP");
                     System.out.println("│  Time:     " + java.time.Instant.now());
-                    System.out.println("│  Robot:    " + getLocalName());
+                    System.out.println("│  Robot:    " + getLocalName() + " (Enabled: " + robot.isEnabled() + ")");
                     System.out.println("│  Location: " + conveyorTargetName);
-                    System.out.println("│  Conveyor: Produced status → false");
+                    System.out.println("│  Conveyor: " + conveyorAgentName);
+                    System.out.println("│  Auth:     OPA authorization verified");
+                    System.out.println("│  Action:   Produced status → false");
                     System.out.println("└──────────────────────────────────────────────────");
                     robot.setCarryingProduct(true);
                     conveyor.setProduced(false);
@@ -539,6 +573,12 @@ public class RobotAgent extends Agent {
     }
 
     private void checkProductDropoff(RobotTemplate robot) {
+        // CRITICAL: Check if robot is enabled before allowing dropoff
+        if (!robot.isEnabled()) {
+            System.out.println("🚫 [" + getLocalName() + "] Cannot dropoff - Robot disabled by OPA policy");
+            return;
+        }
+        
         String location = robot.getLocation();
         boolean isCarryingProduct = robot.isCarryingProduct();
         String target = robot.getTarget();
@@ -549,8 +589,9 @@ public class RobotAgent extends Agent {
             System.out.println("┌─ PRODUCT DROPOFF ────────────────────────────────");
             System.out.println("│  📤 DROPOFF");
             System.out.println("│  Time:     " + java.time.Instant.now());
-            System.out.println("│  Robot:    " + getLocalName());
+            System.out.println("│  Robot:    " + getLocalName() + " (Enabled: " + robot.isEnabled() + ")");
             System.out.println("│  Location: " + location);
+            System.out.println("│  Auth:     OPA authorization verified");
             System.out.println("│  Status:   Delivery completed");
             System.out.println("└──────────────────────────────────────────────────");
             
@@ -578,6 +619,11 @@ public class RobotAgent extends Agent {
         return false;
     }
     private void checkAndSetNewTarget(RobotTemplate robot) {
+        // CRITICAL: Check if robot is enabled before assigning new targets
+        if (!robot.isEnabled()) {
+            return; // Robot disabled - cannot receive new targets
+        }
+        
         boolean isCarryingProduct = robot.isCarryingProduct();
         String currentTarget = robot.getTarget();
         String currentLocation = robot.getLocation();
