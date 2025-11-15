@@ -2703,13 +2703,25 @@ def OnRun():
                 if not goal_pathway_name:
                     continue
                 
+                # FUZZY MATCHING: Handle name variations (e.g., "InputConveyor 2" vs "InputConveyor #2")
+                matched_conveyor_name = None
+                if goal_pathway_name not in conveyor_components:
+                    # Try fuzzy matching - normalize names for comparison
+                    goal_normalized = goal_pathway_name.replace('#', '').replace(' ', '').lower()
+                    for conv_name in conveyor_components:
+                        conv_normalized = conv_name.replace('#', '').replace(' ', '').lower()
+                        if goal_normalized == conv_normalized:
+                            matched_conveyor_name = conv_name
+                            print("Robot " + str(robot_index) + " matched '" + goal_pathway_name + "' to '" + conv_name + "'")
+                            break
+                else:
+                    matched_conveyor_name = goal_pathway_name
 
-
-                if goal_pathway_name in conveyor_components:
-                    conveyor = conveyors[goal_pathway_name]
+                if matched_conveyor_name:
+                    conveyor = conveyors.get(matched_conveyor_name)
                     if conveyor:
                         goal_pathway = {
-                            "Name": goal_pathway_name,
+                            "Name": matched_conveyor_name,  # Use matched name
                             "X": conveyor.WorldPositionMatrix.P.X,
                             "Y": conveyor.WorldPositionMatrix.P.Y,
                             "Rz": 0,
@@ -2717,11 +2729,14 @@ def OnRun():
                             "AreaWidth": conveyor.getProperty('ConveyorWidth').Value if conveyor.getProperty('ConveyorWidth') else 0
                         }
                     else:
+                        print("Robot " + str(robot_index) + " ERROR: Conveyor component '" + matched_conveyor_name + "' not found")
                         continue
                 else:
+                    # Try to find in pathways
                     goal_pathway = next((p for p in pathways_dict if p['Name'] == goal_pathway_name), None)
 
                 if not goal_pathway:
+                    print("Robot " + str(robot_index) + " ERROR: Target '" + goal_pathway_name + "' not found in conveyors or pathways")
                     continue
 
                 # Use reservation-based pathfinding
@@ -2729,11 +2744,13 @@ def OnRun():
 
                 if shortest_path:
                     # Separate pathways from conveyors - conveyors are destinations, not pathways to traverse
+                    # Use matched_conveyor_name if available, otherwise goal_pathway_name
+                    actual_target_name = matched_conveyor_name if matched_conveyor_name else goal_pathway_name
                     pathways_robot = [app.findComponent(p['Name']) for p in shortest_path[1:] if p['Name'] not in conveyor_components]
                     conveyor_destination = None
                     
-                    if goal_pathway_name in conveyor_components:
-                        conveyor_destination = conveyors[goal_pathway_name]
+                    if actual_target_name in conveyor_components:
+                        conveyor_destination = conveyors[actual_target_name]
 
                     # Try to reserve the pathway portion only (excluding conveyor destination)
                     if reserve_planned_path(robot_index, pathways_robot):
@@ -2746,13 +2763,16 @@ def OnRun():
                         robot_states[robot_index]['current_pathway_index'] = 0
                         robot_states[robot_index]['moving'] = True
                         robot_states[robot_index]['vehicle_initialized'] = False  # Reset vehicle for new journey
+                        print("Robot " + str(robot_index) + " starting movement to " + actual_target_name + " via " + str(len(pathways_robot)) + " pathways")
                     else:
                         # Path reservation failed - robot will wait and try again
+                        print("Robot " + str(robot_index) + " path reservation failed - waiting")
                         set_robot_property('Stop', True, robot_index)
                         # Clear any previous conveyor destination
                         robot_states[robot_index]['conveyor_destination'] = None
                 else:
                     # No path found - robot will wait
+                    print("Robot " + str(robot_index) + " ERROR: No path found to " + goal_pathway_name)
                     set_robot_property('Stop', True, robot_index)
                     # Clear any previous conveyor destination
                     robot_states[robot_index]['conveyor_destination'] = None
