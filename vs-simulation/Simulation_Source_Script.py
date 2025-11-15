@@ -2703,17 +2703,37 @@ def OnRun():
                 if not goal_pathway_name:
                     continue
                 
-                # FUZZY MATCHING: Handle name variations (e.g., "InputConveyor 2" vs "InputConveyor #2")
+                # FUZZY MATCHING: Handle name variations (e.g., "InputConveyor" -> "InputConveyor #1", "InputConveyor 2" vs "InputConveyor #2")
                 matched_conveyor_name = None
                 if goal_pathway_name not in conveyor_components:
-                    # Try fuzzy matching - normalize names for comparison
-                    goal_normalized = goal_pathway_name.replace('#', '').replace(' ', '').lower()
-                    for conv_name in conveyor_components:
-                        conv_normalized = conv_name.replace('#', '').replace(' ', '').lower()
-                        if goal_normalized == conv_normalized:
-                            matched_conveyor_name = conv_name
-                            print("Robot " + str(robot_index) + " matched '" + goal_pathway_name + "' to '" + conv_name + "'")
-                            break
+                    # Special case: "InputConveyor" without number should map to first input conveyor
+                    if goal_pathway_name == "InputConveyor":
+                        # Find the first input conveyor (InputConveyor #1 or InputConveyor)
+                        for conv_name in conveyor_components:
+                            if 'input' in conv_name.lower() and 'conveyor' in conv_name.lower():
+                                # Check if it's the first one (either no number, or #1, or 1)
+                                if '#1' in conv_name or conv_name == 'InputConveyor' or conv_name.endswith(' 1'):
+                                    matched_conveyor_name = conv_name
+                                    print("Robot " + str(robot_index) + " mapped 'InputConveyor' to '" + conv_name + "'")
+                                    break
+                        
+                        # If no #1 found, just take the first input conveyor
+                        if not matched_conveyor_name:
+                            for conv_name in conveyor_components:
+                                if 'input' in conv_name.lower() and 'conveyor' in conv_name.lower():
+                                    matched_conveyor_name = conv_name
+                                    print("Robot " + str(robot_index) + " mapped 'InputConveyor' to first available '" + conv_name + "'")
+                                    break
+                    
+                    # General fuzzy matching - normalize names for comparison
+                    if not matched_conveyor_name:
+                        goal_normalized = goal_pathway_name.replace('#', '').replace(' ', '').lower()
+                        for conv_name in conveyor_components:
+                            conv_normalized = conv_name.replace('#', '').replace(' ', '').lower()
+                            if goal_normalized == conv_normalized:
+                                matched_conveyor_name = conv_name
+                                print("Robot " + str(robot_index) + " matched '" + goal_pathway_name + "' to '" + conv_name + "'")
+                                break
                 else:
                     matched_conveyor_name = goal_pathway_name
 
@@ -2796,33 +2816,80 @@ def OnRun():
             current_location = get_robot_property_value('Location', robot_index)
             
             # Update robot location when near target conveyors for OPC-UA (immediate update)
-            if goal_pathway_name and goal_pathway_name in conveyor_components:
-                target_conveyor = conveyors.get(goal_pathway_name)
-                if target_conveyor:
-                    conveyor_pos = target_conveyor.WorldPositionMatrix.P
-                    distance_to_conveyor = vector_length(vector_subtract(robot_pos, conveyor_pos))
-                    
-                    # Set location when robot is close to conveyor (for OPC-UA monitoring)
-                    if distance_to_conveyor < 1500:
-                        if current_location != goal_pathway_name:
-                            set_robot_property('Location', goal_pathway_name, robot_index)
-                            set_robot_property('NextLocation', '', robot_index)
+            if goal_pathway_name:
+                # Apply same fuzzy matching for location updates
+                target_conveyor_name = goal_pathway_name
+                if goal_pathway_name not in conveyor_components:
+                    # Map "InputConveyor" to first input conveyor
+                    if goal_pathway_name == "InputConveyor":
+                        for conv_name in conveyor_components:
+                            if 'input' in conv_name.lower() and 'conveyor' in conv_name.lower():
+                                if '#1' in conv_name or conv_name == 'InputConveyor' or conv_name.endswith(' 1'):
+                                    target_conveyor_name = conv_name
+                                    break
+                        if target_conveyor_name == goal_pathway_name:
+                            for conv_name in conveyor_components:
+                                if 'input' in conv_name.lower() and 'conveyor' in conv_name.lower():
+                                    target_conveyor_name = conv_name
+                                    break
+                    else:
+                        # Try fuzzy matching
+                        goal_normalized = goal_pathway_name.replace('#', '').replace(' ', '').lower()
+                        for conv_name in conveyor_components:
+                            conv_normalized = conv_name.replace('#', '').replace(' ', '').lower()
+                            if goal_normalized == conv_normalized:
+                                target_conveyor_name = conv_name
+                                break
+                
+                if target_conveyor_name in conveyor_components:
+                    target_conveyor = conveyors.get(target_conveyor_name)
+                    if target_conveyor:
+                        conveyor_pos = target_conveyor.WorldPositionMatrix.P
+                        distance_to_conveyor = vector_length(vector_subtract(robot_pos, conveyor_pos))
+                        
+                        # Set location when robot is close to conveyor (for OPC-UA monitoring)
+                        if distance_to_conveyor < 1500:
+                            if current_location != target_conveyor_name:
+                                set_robot_property('Location', target_conveyor_name, robot_index)
+                                set_robot_property('NextLocation', '', robot_index)
 
             # Only handle component pickup/drop-off when robot is at conveyor destination (not moving)
             if not robot_moving and current_location in conveyor_components:
-                if is_input_conveyor(goal_pathway_name):
+                # Apply fuzzy matching for goal_pathway_name
+                target_conveyor_name_for_pickup = goal_pathway_name
+                if goal_pathway_name and goal_pathway_name not in conveyor_components:
+                    if goal_pathway_name == "InputConveyor":
+                        for conv_name in conveyor_components:
+                            if 'input' in conv_name.lower() and 'conveyor' in conv_name.lower():
+                                if '#1' in conv_name or conv_name == 'InputConveyor' or conv_name.endswith(' 1'):
+                                    target_conveyor_name_for_pickup = conv_name
+                                    break
+                        if target_conveyor_name_for_pickup == goal_pathway_name:
+                            for conv_name in conveyor_components:
+                                if 'input' in conv_name.lower() and 'conveyor' in conv_name.lower():
+                                    target_conveyor_name_for_pickup = conv_name
+                                    break
+                
+                if is_input_conveyor(target_conveyor_name_for_pickup):
                     # Check if robot is at the target conveyor (for pickup)
-                    target_conveyor = conveyors.get(goal_pathway_name)
+                    target_conveyor = conveyors.get(target_conveyor_name_for_pickup)
                     carried_product = get_robot_property_value('CarriedProduct', robot_index)
                     
                     # Check if robot is not already carrying something and is at the right conveyor
-                    if target_conveyor and (not carried_product or carried_product == '') and current_location == goal_pathway_name:
+                    # Match current_location with target (both may need fuzzy matching)
+                    location_matches = (current_location == target_conveyor_name_for_pickup or 
+                                       current_location == goal_pathway_name or
+                                       (current_location.replace('#', '').replace(' ', '').lower() == 
+                                        target_conveyor_name_for_pickup.replace('#', '').replace(' ', '').lower()))
+                    
+                    if target_conveyor and (not carried_product or carried_product == '') and location_matches:
                         conveyor_pos = target_conveyor.WorldPositionMatrix.P
                         distance_to_conveyor = vector_length(vector_subtract(robot_pos, conveyor_pos))
                         
                         if distance_to_conveyor < 2000:  # Within pickup range at destination
                             # Find any produced component on this input conveyor, regardless of product type
-                            component_name = findAnyComponentOnInputConveyor(goal_pathway_name)
+                            # Use the matched conveyor name for finding components
+                            component_name = findAnyComponentOnInputConveyor(target_conveyor_name_for_pickup)
                             if component_name:
                                 # Double-check that no other robot is currently carrying this component
                                 component = app.findComponent(component_name)
