@@ -45,7 +45,7 @@ def convert_to_camel_case(name):
     return name
 
 def is_original_format(name):
-    # Check if a property name is already in the original format (PascalCase) that scripts expect.
+    """Check if a property name is already in the original format (PascalCase) that scripts expect."""
     if not name:
         return False
     
@@ -59,7 +59,7 @@ def is_original_format(name):
     return False
 
 def convert_from_camel_case_to_original(name):
-    # Convert camelCase names back to original names that scripts expect.
+    """Convert camelCase names back to original names that scripts expect."""
     if not name:
         return name
     
@@ -109,7 +109,7 @@ def convert_from_camel_case_to_original(name):
     return name
 
 def convert_boolean_value(value):
-    # Convert Python boolean values for metamodel compatibility.
+    """Convert Python boolean values for metamodel compatibility."""
     if isinstance(value, bool):
         # For metamodel compatibility, convert Python booleans to lowercase strings
         # but handle them properly in the Visual Components system
@@ -117,7 +117,7 @@ def convert_boolean_value(value):
     return value
 
 def create_metamodel_compatible_properties(component, config):
-    # Create additional properties with camelCase names for metamodel compatibility.
+    """Create additional properties with camelCase names for metamodel compatibility."""
     
     # Create metamodel-compatible properties for regular properties
     if "properties" in config:
@@ -175,7 +175,7 @@ def create_metamodel_compatible_properties(component, config):
                                 camel_case_prop.Value = original_prop.Value
 
 def create_component(app, config):
-    # Create a single component based on configuration.
+    """Create a single component based on configuration."""
     
     component_name = config["name"]
     component_folder = config["folder"]
@@ -220,9 +220,9 @@ def create_component(app, config):
                     vehicle = component.createBehaviour(VC_VEHICLE, "Vehicle")
                     # TEMPLATE: Replace hardcoded vehicle properties with values from metamodel Robot.acceleration, Robot.deceleration, Robot.maxSpeed, Robot.interpolation attributes
                     # Configure vehicle properties
-                    vehicle.Acceleration = 400.0
-                    vehicle.Deceleration = 400.0
-                    vehicle.MaxSpeed = 1200.0
+                    vehicle.Acceleration = 300.0
+                    vehicle.Deceleration = 300.0
+                    vehicle.MaxSpeed = 800.0
                     vehicle.Interpolation = 0.15
             
             # Create properties with ORIGINAL names for script compatibility
@@ -342,9 +342,9 @@ def create_pathways(prop):
     app.render()
 
 def OnRun():
-    # TEMPLATE: Replace hardcoded wait time '30' with PathwayArea.opcuaWaitCycles attribute from metamodel
-    # Wait for OPC-UA data (reduced from 50 to 30 for faster startup)
-    for i in range(30):  # 3 seconds max
+    # TEMPLATE: Replace hardcoded wait time '50' with PathwayArea.opcuaWaitCycles attribute from metamodel
+    # Wait for OPC-UA data
+    for i in range(50):  # 5 seconds max
         # TEMPLATE: Replace hardcoded property name 'PathwayProperties' with PathwayArea.opcuaPropertyName attribute from metamodel
         pathway_prop = comp.getProperty('pathwayProperties')
         if pathway_prop and pathway_prop.Value and pathway_prop.Value != "[]":
@@ -416,9 +416,9 @@ def create_conveyors(prop):
     app.render()
 
 def OnRun():
-    # TEMPLATE: Replace hardcoded delay time '0.5' with OutputConveyor.opcuaDelayTime attribute from metamodel
-    # Wait for OPC-UA data (reduced for faster startup)
-    delay(0.5)
+    # TEMPLATE: Replace hardcoded delay time '1' with OutputConveyor.opcuaDelayTime attribute from metamodel
+    # Wait for OPC-UA data
+    delay(1)
     
     # TEMPLATE: Replace hardcoded property name 'output_conveyor_Properties' with OutputConveyor.opcuaPropertyName attribute from metamodel
     # Read the properties from OPC-UA
@@ -591,15 +591,15 @@ def set_conveyor_properties(conveyor, index, product_type, clone_time_interval, 
     prop.Value = index
 
 def OnRun():
-    # TEMPLATE: Replace hardcoded wait time '30' with InputConveyor.opcuaWaitCycles attribute from metamodel
-    # Wait for OPC-UA data with delay loop (reduced from 50 to 30 for faster startup)
-    for i in range(30):  # 3 seconds max
+    # TEMPLATE: Replace hardcoded wait time '50' with InputConveyor.opcuaWaitCycles attribute from metamodel
+    # Wait for OPC-UA data with delay loop (following pattern from other components)
+    for i in range(50):  # 5 seconds max
         # TEMPLATE: Replace hardcoded property name 'Input_Conveyor_Location' with InputConveyor.locationPropertyName attribute from metamodel
         input_location_prop = comp.getProperty('inputconveyorProperties')
         if input_location_prop and input_location_prop.Value and input_location_prop.Value != "[]":
             clone_conveyors()
             break
-        delay(0.05)
+        delay(0.1)
     
     # Main run loop
     while True:
@@ -758,9 +758,9 @@ def create_idles(prop):
     app.render()
 
 def OnRun():
-    # TEMPLATE: Replace hardcoded wait time '30' with IdleLocation.opcuaWaitCycles attribute from metamodel
-    # Wait for OPC-UA data (reduced from 50 to 30 for faster startup)
-    for i in range(30):  # 3 seconds max
+    # TEMPLATE: Replace hardcoded wait time '50' with IdleLocation.opcuaWaitCycles attribute from metamodel
+    # Wait for OPC-UA data
+    for i in range(50):  # 5 seconds max
         # TEMPLATE: Replace hardcoded property name 'idleProperties' with IdleLocation.opcuaPropertyName attribute from metamodel
         idle_prop = comp.getProperty('idleProperties')
         if idle_prop and idle_prop.Value and idle_prop.Value != "[]":
@@ -796,17 +796,17 @@ sim = getSimulation()
 
 # Helper function to check if a component is a conveyor
 def is_conveyor(component_name):
-    # Check if a component name indicates it's a conveyor by looking for 'conveyor' in the name (case-insensitive)
+    """Check if a component name indicates it's a conveyor by looking for 'conveyor' in the name (case-insensitive)"""
     return 'conveyor' in component_name.lower()
 
 # Helper function to check if a component is an input conveyor
 def is_input_conveyor(component_name):
-    # Check if a component name indicates it's an input conveyor by looking for 'input' in the name (case-insensitive)
+    """Check if a component name indicates it's an input conveyor by looking for 'input' in the name (case-insensitive)"""
     return 'input' in component_name.lower()
 
 # Helper function to check if a component is an output conveyor
 def is_output_conveyor(component_name):
-    # Check if a component name indicates it's an output conveyor by looking for 'output' in the name (case-insensitive)
+    """Check if a component name indicates it's an output conveyor by looking for 'output' in the name (case-insensitive)"""
     return 'output' in component_name.lower()
 
 robots = []
@@ -950,9 +950,9 @@ def clone_robots():
         if not robot.findBehaviour("Vehicle"):
             vehicle = robot.createBehaviour(VC_VEHICLE, "Vehicle")
             # TEMPLATE: Replace hardcoded vehicle properties with values from metamodel Robot.acceleration, Robot.deceleration, Robot.maxSpeed, Robot.interpolation attributes
-            vehicle.Acceleration = 400.0
-            vehicle.Deceleration = 400.0
-            vehicle.MaxSpeed = 1200.0
+            vehicle.Acceleration = 300.0
+            vehicle.Deceleration = 300.0
+            vehicle.MaxSpeed = 800.0
             vehicle.Interpolation = 0.15
 
         # Set initial positions
@@ -978,7 +978,7 @@ def clone_robots():
     app.render()
 
 def update_robot_positions():
-    #Update robot positions when InitialPositions property changes
+    """Update robot positions when InitialPositions property changes"""
     global comp
     if not robots:
         return
@@ -1042,7 +1042,7 @@ def vector_length(v):
     return math.sqrt(v.X**2 + v.Y**2 + v.Z**2)
 
 def find_shortest_transition_point(robot_pos, current_pathway, next_pathway):
-    # Find the shortest transition point between current pathway and next pathway/destination - optimized for performance
+    """Find the shortest transition point between current pathway and next pathway/destination - optimized for performance"""
     # Get current pathway geometry
     curr_pos = current_pathway.WorldPositionMatrix.P
     curr_length1 = current_pathway.getProperty('Length1').Value if current_pathway.getProperty('Length1') else 0
@@ -1210,7 +1210,7 @@ def find_shortest_transition_point(robot_pos, current_pathway, next_pathway):
         return curr_pos, curr_pos
 
 def calculate_smart_entry_exit_points(robot_pos, current_pathway, next_pathway=None, previous_pathway=None):
-    # Calculate smart entry and exit points focusing on shortest transitions
+    """Calculate smart entry and exit points focusing on shortest transitions"""
     
     # Find the optimal transition point to next pathway
     if next_pathway:
@@ -1295,7 +1295,7 @@ def calculate_smart_entry_exit_points(robot_pos, current_pathway, next_pathway=N
     return entry_point, exit_point
 
 def calculate_intelligent_pathway_points(robot_pos, current_pathway, next_pathway=None, previous_pathway=None):
-    # Calculate intelligent turning and transition points within pathways for optimal movement
+    """Calculate intelligent turning and transition points within pathways for optimal movement"""
     pos = current_pathway.WorldPositionMatrix.P
     length1 = current_pathway.getProperty('Length1').Value if current_pathway.getProperty('Length1') else 0
     length2 = current_pathway.getProperty('Length2').Value if current_pathway.getProperty('Length2') else 0
@@ -1412,7 +1412,7 @@ def calculate_intelligent_pathway_points(robot_pos, current_pathway, next_pathwa
     return entry_point, intermediate_points, exit_point
 
 def get_optimal_pathway_direction(robot, robot_index, current_pathway, pathways, current_index):
-    # Enhanced pathway direction calculation with smart entry/exit points
+    """Enhanced pathway direction calculation with smart entry/exit points"""
     robot_pos = getRobotPosition(robot)
     
     # Get next and previous pathways for context
@@ -1427,7 +1427,7 @@ def get_optimal_pathway_direction(robot, robot_index, current_pathway, pathways,
     return exit_point
 
 def find_pathway_intersection_point(current_pathway, next_pathway):
-    # Find the optimal intersection point between two pathways for smooth transitions
+    """Find the optimal intersection point between two pathways for smooth transitions"""
     # Get current pathway geometry
     current_pos = current_pathway.WorldPositionMatrix.P
     current_length1 = current_pathway.getProperty('Length1').Value if current_pathway.getProperty('Length1') else 0
@@ -1485,14 +1485,14 @@ def find_pathway_intersection_point(current_pathway, next_pathway):
     return vector_add(current_pos, vector_multiply(vector_subtract(next_pos, current_pos), 0.5))
 
 def can_transition_directly(robot_pos, current_pathway, next_pathway, transition_threshold=1500):
-    # Check if robot can transition directly between pathways without going to endpoints
+    """Check if robot can transition directly between pathways without going to endpoints"""
     intersection_point = find_pathway_intersection_point(current_pathway, next_pathway)
     distance_to_intersection = vector_length(vector_subtract(robot_pos, intersection_point))
     
     return distance_to_intersection < transition_threshold
 
 def calculate_side_by_side_offset(robot, robot_index, pathway):
-    # Minimal side-by-side calculation - only for robots actually in same pathway (prevents zigzag)
+    """Minimal side-by-side calculation - only for robots actually in same pathway (prevents zigzag)"""
     robot_radius = 400
     base_lane_spacing = 1200
     
@@ -1554,13 +1554,11 @@ def calculate_side_by_side_offset(robot, robot_index, pathway):
         return vcVector.new(0, 0, 0)
 
 def calculate_avoidance_offset(robot, robot_index):
-    # Calculate smooth avoidance offset with direction-aware behavior
+    """Calculate smooth avoidance offset for path planning only - no real-time position changes"""
     robot_pos = getRobotPosition(robot)
     avoidance_offset = vcVector.new(0, 0, 0)
-    robot_radius = 400
-    safe_distance = 1000
-    
-    robot_direction = get_movement_direction(robot, robot_index)
+    robot_radius = 400  # Reduced from 600 for more accurate collision boundaries
+    safe_distance = 1000  # Safe separation distance
     
     for other_robot in robots:
         if other_robot != robot:
@@ -1576,19 +1574,9 @@ def calculate_avoidance_offset(robot, robot_index):
                 # Normalize the distance vector to get direction
                 avoid_direction = normalize_vector(distance_vector)
                 
-                # Calculate smooth offset based on distance
+                # Calculate smooth offset based on distance (closer = stronger avoidance)
                 avoidance_strength = max(0, (safe_distance - distance) / safe_distance)
-                
-                # Direction-aware avoidance: stronger for opposite directions
-                other_direction = get_movement_direction(other_robot, other_robot_index)
-                offset_magnitude = avoidance_strength * 300  # Default
-                
-                if robot_direction and other_direction:
-                    dot_product = robot_direction.X * other_direction.X + robot_direction.Y * other_direction.Y
-                    if dot_product < -0.5:  # Moving in opposite directions (head-on)
-                        offset_magnitude = avoidance_strength * 500  # Stronger avoidance
-                    elif dot_product > 0.5:  # Moving in same direction
-                        offset_magnitude = avoidance_strength * 150  # Weaker avoidance
+                offset_magnitude = avoidance_strength * 300  # Maximum 300 units offset
                 
                 # Apply avoidance with smooth falloff
                 avoidance_offset = vector_add(avoidance_offset, vector_multiply(avoid_direction, offset_magnitude))
@@ -1596,7 +1584,7 @@ def calculate_avoidance_offset(robot, robot_index):
     return avoidance_offset
 
 def check_velocity_obstacle_collision(robot, robot_index):
-    # Velocity obstacle-based collision detection for proactive avoidance
+    """Velocity obstacle-based collision detection for proactive avoidance"""
     robot_pos = getRobotPosition(robot)
     robot_radius = 600  # Robot collision radius
     prediction_time = 3.0  # Look ahead time
@@ -1660,7 +1648,7 @@ def check_velocity_obstacle_collision(robot, robot_index):
     return should_stop
 
 def calculate_coordinated_side_by_side_offset(robot, robot_index, pathway, partner_index):
-    # Calculate coordinated side-by-side offset - both robots move to their lanes simultaneously
+    """Calculate coordinated side-by-side offset - both robots move to their lanes simultaneously"""
     robot_radius = 400
     lane_spacing = 1500  # Increased spacing for better clearance, especially in intersections
     robot_pos = getRobotPosition(robot)
@@ -1730,7 +1718,7 @@ def calculate_coordinated_side_by_side_offset(robot, robot_index, pathway, partn
     return vector_multiply(offset_direction, offset_distance)
 
 def calculate_in_place_side_by_side_offset(robot, robot_index, pathway):
-    # Calculate side-by-side offset from current position without going back to pathway start
+    """Calculate side-by-side offset from current position without going back to pathway start"""
     robot_radius = 400
     base_lane_spacing = 1200  
     robot_pos = getRobotPosition(robot)
@@ -1776,7 +1764,7 @@ def calculate_in_place_side_by_side_offset(robot, robot_index, pathway):
     return vector_multiply(offset_direction, offset_distance)
 
 def check_bypass_possibility(robot, robot_index, stationary_robot, stationary_robot_index):
-    # Check if a moving robot can safely bypass a stationary robot
+    """Check if a moving robot can safely bypass a stationary robot"""
     robot_pos = getRobotPosition(robot)
     stationary_pos = getRobotPosition(stationary_robot)
     robot_radius = 600  # Safety radius for bypass
@@ -1819,7 +1807,7 @@ def check_bypass_possibility(robot, robot_index, stationary_robot, stationary_ro
     return False  # No safe bypass route found
 
 def calculate_bypass_offset(robot, robot_index, stationary_robot_index):
-    # Calculate the lateral offset needed to bypass a stationary robot
+    """Calculate the lateral offset needed to bypass a stationary robot"""
     robot_pos = getRobotPosition(robot)
     stationary_robot = next((r for r in robots if get_robot_index(r.Name) == stationary_robot_index), None)
     
@@ -1851,7 +1839,7 @@ def calculate_bypass_offset(robot, robot_index, stationary_robot_index):
     return vector_multiply(bypass_direction, bypass_distance)
 
 def check_side_clearance(position, direction, robot_index):
-    # Check how much clearance is available in a given direction
+    """Check how much clearance is available in a given direction"""
     clearance = 5000  # Start with maximum clearance
     
     for other_robot in robots:
@@ -1874,7 +1862,7 @@ def check_side_clearance(position, direction, robot_index):
     return max(0, clearance)
 
 def get_movement_direction(robot, robot_index):
-    # Get robot's movement direction based on current and next locations
+    """Get robot's movement direction based on current and next locations"""
     current_location = get_robot_property_value('Location', robot_index)
     next_location = get_robot_property_value('NextLocation', robot_index)
     
@@ -1898,7 +1886,7 @@ def get_movement_direction(robot, robot_index):
     return normalize_vector(direction_vector)
 
 def get_distance_to_location(robot, location_name):
-    # Calculate distance from robot to a specific location
+    """Calculate distance from robot to a specific location"""
     robot_pos = getRobotPosition(robot)
     location_component = app.findComponent(location_name)
     if location_component:
@@ -1907,7 +1895,7 @@ def get_distance_to_location(robot, location_name):
     return float('inf')
 
 def apply_collision_avoidance_offset(robot, robot_index, other_robot, other_robot_index):
-    # Apply dynamic offset to prevent nose-to-nose collision - force side-by-side movement
+    """Apply dynamic offset to prevent nose-to-nose collision - force side-by-side movement"""
     robot_pos = getRobotPosition(robot)
     other_pos = getRobotPosition(other_robot)
     vehicle = robot_states[robot_index]['vehicle']
@@ -1951,14 +1939,14 @@ def apply_collision_avoidance_offset(robot, robot_index, other_robot, other_robo
     
     # Apply the offset path immediately
     vehicle.clearMove()
-    vehicle.MaxSpeed = 900  # Slightly slower for offset maneuver
+    vehicle.MaxSpeed = 600  # Slightly slower for offset maneuver
     vehicle.addControlPoint(offset_target)
     
     # Mark robot as using collision avoidance
     robot_states[robot_index]['using_avoidance_offset'] = True
 
 def initiate_backup_maneuver(robot, robot_index):
-    # Initiate a backup maneuver to resolve deadlock
+    """Initiate a backup maneuver to resolve deadlock"""
     robot_pos = getRobotPosition(robot)
     vehicle = robot_states[robot_index]['vehicle'] if robot_index in robot_states else None
     
@@ -1980,7 +1968,7 @@ def initiate_backup_maneuver(robot, robot_index):
     
     # Clear current movement and set backup movement
     vehicle.clearMove()
-    vehicle.MaxSpeed = 600  # Slower speed for backup
+    vehicle.MaxSpeed = 400  # Slower speed for backup
     vehicle.addControlPoint(backup_position)
     
     # Reset movement state to allow re-planning after backup
@@ -1993,7 +1981,7 @@ def initiate_backup_maneuver(robot, robot_index):
     set_robot_property('Target', '', robot_index)
 
 def check_backup_completion(robot, robot_index):
-    # Check if backup maneuver is complete and restore normal operation
+    """Check if backup maneuver is complete and restore normal operation"""
     if 'backing_up' not in robot_states[robot_index] or not robot_states[robot_index]['backing_up']:
         return
     
@@ -2005,7 +1993,7 @@ def check_backup_completion(robot, robot_index):
         robot_states[robot_index]['backing_up'] = False
         vehicle = robot_states[robot_index]['vehicle']
         if vehicle:
-            vehicle.MaxSpeed = 1200  # Restore normal speed
+            vehicle.MaxSpeed = 800  # Restore normal speed
         
         # Restore original target after a brief delay
         if 'original_target' in robot_states[robot_index]:
@@ -2017,20 +2005,12 @@ def check_backup_completion(robot, robot_index):
         robot_states[robot_index]['consecutive_stop_time'] = 0
 
 def check_proximity(robot, robot_index):
-    # Enhanced collision detection with deadlock resolution
+    """Enhanced collision detection with improved head-on collision prevention"""
     current_location = get_robot_property_value('Location', robot_index)
     next_location = get_robot_property_value('NextLocation', robot_index)
     robot_pos = getRobotPosition(robot)
     should_stop = False
     speed_reduction = 1.0  # Default speed multiplier (no reduction)
-    
-    # Initialize deadlock detection if needed
-    if 'deadlock_detection' not in robot_states[robot_index]:
-        robot_states[robot_index]['deadlock_detection'] = {
-            'in_potential_deadlock': False,
-            'deadlock_start_time': 0,
-            'deadlock_partner': None
-        }
     
     # Enhanced transition zone awareness
     in_transition_zone = False
@@ -2068,42 +2048,14 @@ def check_proximity(robot, robot_index):
                 should_stop = True
 
     # ENHANCED head-on collision detection with improved direction analysis
-    robot_moving = robot_index in robot_states and robot_states[robot_index]['moving']
-    
-    # Detection zones with velocity-aware collision prevention
-    early_detection_zone = 5000   # Early warning for proactive avoidance
-    coordination_zone = 3500      # Start coordination earlier
-    critical_zone = 1800 if not in_transition_zone else 2200  # Stricter minimum separation
-    # CRITICAL: Increased minimum separation to prevent collisions
-    base_minimum_separation = 1500  # Increased from 1000
-    speed_factor = 1.0
-    if robot_index in robot_states and robot_states[robot_index]['vehicle']:
-        current_speed = robot_states[robot_index]['vehicle'].MaxSpeed
-        speed_factor = current_speed / 1200.0  # Normalize to base speed
-    minimum_separation = base_minimum_separation * (0.9 + 0.3 * speed_factor)  # 1350-1800 range
-    
-    # CRITICAL: Check minimum separation for ALL robots (moving or not) - moved outside should_stop check
-    for other_robot in robots:
-        if other_robot != robot:
-            other_robot_index = get_robot_index(other_robot.Name)
-            other_pos = getRobotPosition(other_robot)
-            dist = vector_length(vector_subtract(robot_pos, other_pos))
-            
-            # Enforce absolute minimum separation - ALWAYS check regardless of should_stop state
-            if dist < minimum_separation:
-                # Use priority to determine who stops (lower priority stops)
-                self_priority = get_robot_property_value('Priority', robot_index)
-                other_priority = get_robot_property_value('Priority', other_robot_index)
-                # If equal priority, higher index stops
-                if self_priority > other_priority or (self_priority == other_priority and robot_index > other_robot_index):
-                    should_stop = True
-                    break
-                elif self_priority < other_priority or (self_priority == other_priority and robot_index < other_robot_index):
-                    # This robot has priority - slow down but keep moving
-                    speed_reduction = min(speed_reduction, 0.3)
-                    break
-    
     if not should_stop:
+        robot_moving = robot_index in robot_states and robot_states[robot_index]['moving']
+        
+        # Detection zones with stricter head-on collision handling
+        early_detection_zone = 5000   # Increased for better early detection
+        coordination_zone = 4000      # Increased for better coordination
+        critical_zone = 2500 if not in_transition_zone else 3000  # Larger buffer in transition zones
+        
         for other_robot in robots:
             if other_robot != robot:
                 other_robot_index = get_robot_index(other_robot.Name)
@@ -2133,30 +2085,19 @@ def check_proximity(robot, robot_index):
                             dot_product = self_direction.X * other_direction.X + self_direction.Y * other_direction.Y
                             
                             # If robots are moving in nearly opposite directions (head-on collision)
-                            if dot_product < -0.3:  # Tighter threshold for earlier head-on detection
+                            if dot_product < -0.5:  # Strong opposite direction indicator
                                 self_priority = get_robot_property_value('Priority', robot_index)
                                 other_priority = get_robot_property_value('Priority', other_robot_index)
                                 
-                                # CRITICAL ZONE - use smarter yielding based on multiple factors
+                                # CRITICAL ZONE - immediate action for head-on collision
                                 if dist < critical_zone:
-                                    # Yield if: higher priority robot is closer to destination OR equal priority with higher index
-                                    should_yield = False
-                                    if self_priority > other_priority:
-                                        should_yield = True
-                                    elif self_priority == other_priority and robot_index > other_robot_index:
-                                        should_yield = True
-                                    
-                                    if should_yield:
-                                        # Stop if within critical zone, otherwise crawl very slowly
-                                        if dist < critical_zone * 0.85:  # Within 85% of critical zone - stop
-                                            should_stop = True
-                                            robot_states[robot_index]['coordinate_side_by_side'] = True
-                                            robot_states[robot_index]['coordination_partner'] = other_robot_index
-                                            break
-                                        else:
-                                            speed_reduction = 0.2  # Extremely slow crawl
+                                    if self_priority >= other_priority:
+                                        should_stop = True
+                                        robot_states[robot_index]['coordinate_side_by_side'] = True
+                                        robot_states[robot_index]['coordination_partner'] = other_robot_index
+                                        break
                                 
-                                # COORDINATION ZONE - start coordinated avoidance with timeout
+                                # COORDINATION ZONE - start coordinated avoidance
                                 elif dist < coordination_zone:
                                     if not robot_states[robot_index].get('in_coordination', False):
                                         robot_states[robot_index]['coordinate_side_by_side'] = True
@@ -2171,15 +2112,9 @@ def check_proximity(robot, robot_index):
                                             robot_states[other_robot_index]['in_coordination'] = True
                                             robot_states[other_robot_index]['coordination_start_time'] = sim.SimTime
                                             robot_states[other_robot_index]['vehicle_initialized'] = False
-                                    else:
-                                        # Exit coordination mode after 5 seconds to avoid getting stuck
-                                        coordination_duration = sim.SimTime - robot_states[robot_index]['coordination_start_time']
-                                        if coordination_duration > 5.0:
-                                            robot_states[robot_index]['in_coordination'] = False
-                                            robot_states[robot_index]['coordinate_side_by_side'] = False
                                     
-                                    # Speed reduction for head-on scenarios - very aggressive
-                                    speed_reduction = 0.35  # Much stronger reduction for head-on collisions
+                                    # Speed reduction for head-on scenarios
+                                    speed_reduction = 0.5  # Stronger reduction for head-on collisions
                                 
                                 # EARLY DETECTION ZONE - early speed reduction for head-on
                                 elif dist < early_detection_zone:
@@ -2192,21 +2127,11 @@ def check_proximity(robot, robot_index):
                                 other_priority = get_robot_property_value('Priority', other_robot_index)
                                 
                                 if dist < critical_zone:
-                                    # Use same smart yielding logic for side-by-side
-                                    should_yield = False
-                                    if self_priority > other_priority:
-                                        should_yield = True
-                                    elif self_priority == other_priority and robot_index > other_robot_index:
-                                        should_yield = True
-                                    
-                                    if should_yield:
-                                        if dist < critical_zone * 0.85:  # Within 85% - stop
-                                            should_stop = True
-                                            robot_states[robot_index]['coordinate_side_by_side'] = True
-                                            robot_states[robot_index]['coordination_partner'] = other_robot_index
-                                            break
-                                        else:
-                                            speed_reduction = 0.25  # Very slow
+                                    if self_priority >= other_priority:
+                                        should_stop = True
+                                        robot_states[robot_index]['coordinate_side_by_side'] = True
+                                        robot_states[robot_index]['coordination_partner'] = other_robot_index
+                                        break
                                 elif dist < coordination_zone:
                                     if not robot_states[robot_index].get('in_coordination', False):
                                         robot_states[robot_index]['coordinate_side_by_side'] = True
@@ -2221,17 +2146,11 @@ def check_proximity(robot, robot_index):
                                             robot_states[other_robot_index]['in_coordination'] = True
                                             robot_states[other_robot_index]['coordination_start_time'] = sim.SimTime
                                             robot_states[other_robot_index]['vehicle_initialized'] = False
-                                    else:
-                                        # Exit coordination mode after 5 seconds
-                                        coordination_duration = sim.SimTime - robot_states[robot_index]['coordination_start_time']
-                                        if coordination_duration > 5.0:
-                                            robot_states[robot_index]['in_coordination'] = False
-                                            robot_states[robot_index]['coordinate_side_by_side'] = False
                                     
-                                    speed_reduction = 0.5  # More conservative for side-by-side
+                                    speed_reduction = 0.6
                                 elif dist < early_detection_zone:
                                     if not robot_states[robot_index].get('in_coordination', False):
-                                        speed_reduction = 0.75  # Earlier slowdown
+                                        speed_reduction = 0.8
                 
                 # Handle stationary robots
                 elif robot_moving and not other_moving and dist < 2500:
@@ -2248,104 +2167,36 @@ def check_proximity(robot, robot_index):
                                     break
                                 else:
                                     robot_states[robot_index]['bypass_target'] = other_robot_index
-                                    speed_reduction = 0.4  # Slow down even when bypassing
-                            elif dist < critical_zone * 1.3:  # Extended zone for stationary robots
-                                speed_reduction = 0.5  # Slow down when approaching stationary robot
                             else:
                                 # Only reduce speed when approaching conveyors or stationary robots
                                 if approaching_conveyor:
                                     speed_reduction = 0.6  # Reduce speed when approaching conveyor
                                 else:
-                                    speed_reduction = 0.75  # Earlier reduction for stationary robots
+                                    speed_reduction = 0.8  # Normal reduction for stationary robots
 
-    # Deadlock resolution: Check if robot has been stopped too long
-    if should_stop and robot_index in robot_states:
-        deadlock = robot_states[robot_index]['deadlock_detection']
-        current_time = sim.SimTime if sim else 0
-        
-        if not deadlock['in_potential_deadlock']:
-            deadlock['in_potential_deadlock'] = True
-            deadlock['deadlock_start_time'] = current_time
-        else:
-            deadlock_duration = current_time - deadlock['deadlock_start_time']
-            
-            # Force resolution after 3 seconds (reduced from 5) with smarter logic
-            if deadlock_duration > 3.0:
-                # Use robot index priority - lower index moves first
-                # This creates deterministic resolution without time slots
-                # Find if there are other robots also in deadlock nearby
-                other_deadlocked = []
-                for other_robot in robots:
-                    if other_robot != robot:
-                        other_index = get_robot_index(other_robot.Name)
-                        if other_index in robot_states:
-                            other_deadlock = robot_states[other_index]['deadlock_detection']
-                            if other_deadlock['in_potential_deadlock']:
-                                other_pos = getRobotPosition(other_robot)
-                                dist = vector_length(vector_subtract(robot_pos, other_pos))
-                                if dist < 3000:  # Within proximity
-                                    other_deadlocked.append(other_index)
-                
-                # If this robot has lowest index among deadlocked robots, it moves
-                if not other_deadlocked or robot_index < min(other_deadlocked):
-                    should_stop = False
-                    speed_reduction = 0.3  # Very slow movement to break deadlock
-                    # Only print occasionally to avoid spam
-                    if int(deadlock_duration * 10) % 20 == 0:  # Every 2 seconds after threshold
-                        print("Robot " + str(robot_index) + " resolving deadlock (priority movement)")
-                    # Reset deadlock state after breaking free
-                    robot_states[robot_index]['deadlock_detection']['in_potential_deadlock'] = False
-                    robot_states[robot_index]['deadlock_detection']['deadlock_start_time'] = 0
-    else:
-        # Reset deadlock detection when not stopped
-        if robot_index in robot_states and robot_states[robot_index]['deadlock_detection']['in_potential_deadlock']:
-            robot_states[robot_index]['deadlock_detection']['in_potential_deadlock'] = False
-            robot_states[robot_index]['deadlock_detection']['deadlock_start_time'] = 0
-    
-    # Calculate adaptive speed with congestion awareness and ENFORCE it
+    # Apply speed reduction to vehicle - only when approaching conveyors or in collision scenarios
     if robot_index in robot_states and robot_states[robot_index]['vehicle']:
         vehicle = robot_states[robot_index]['vehicle']
-        base_speed = 1200.0
+        base_speed = 800.0
         
-        # Factor in pathway congestion
-        congestion_factor = 1.0
-        if next_location:
-            robots_in_next = 0
-            for other_robot in robots:
-                if other_robot != robot:
-                    other_index = get_robot_index(other_robot.Name)
-                    other_location = get_robot_property_value('Location', other_index)
-                    if other_location == next_location:
-                        robots_in_next += 1
-            
-            if robots_in_next >= 2:
-                congestion_factor = 0.5  # 50% speed if congested
-            elif robots_in_next == 1:
-                congestion_factor = 0.7  # 70% speed if occupied
-        
-        # Apply all speed factors
-        final_speed_factor = min(speed_reduction, congestion_factor)
-        
-        # ALWAYS enforce speed changes (removed conditional)
-        new_speed = base_speed * final_speed_factor
-        if vehicle.MaxSpeed != new_speed:
-            vehicle.MaxSpeed = new_speed
-            # Force vehicle to respect speed change immediately
-            if hasattr(vehicle, 'Speed'):
-                vehicle.Speed = min(vehicle.Speed, new_speed)
+        # Apply speed reduction based on situation
+        if approaching_conveyor or speed_reduction < 1.0:
+            new_speed = base_speed * speed_reduction
+            if vehicle.MaxSpeed != new_speed:
+                vehicle.MaxSpeed = new_speed
+        elif vehicle.MaxSpeed != base_speed:
+            # Restore normal speed when not approaching conveyor and no collision risk
+            vehicle.MaxSpeed = base_speed
     
     set_robot_property('Stop', should_stop, robot_index)
 
 def reserve_planned_path(robot_index, planned_pathways):
-    # Progressive reservation - reserve only next few pathways for better flow
+    """Reserve planned path with shorter, more efficient timing"""
     robot_planned_paths[robot_index] = planned_pathways
     reservation_success = True
     
-    # Progressive reservation: only reserve next 3 pathways instead of entire path
-    lookahead = min(3, len(planned_pathways))
-    
-    # Try to reserve immediate pathways only
-    for i, pathway in enumerate(planned_pathways[:lookahead]):
+    # Try to reserve all pathways in the planned route
+    for i, pathway in enumerate(planned_pathways):
         pathway_name = pathway.Name if hasattr(pathway, 'Name') else pathway
         # Shorter reservation duration to reduce unnecessary blocking
         reservation_duration = 5.0 + (i * 1.0)  # Reduced duration
@@ -2358,7 +2209,7 @@ def reserve_planned_path(robot_index, planned_pathways):
     return reservation_success
 
 def release_completed_reservations(robot_index):
-    #Release reservations for pathways the robot has passed
+    """Release reservations for pathways the robot has passed"""
     if robot_index not in robot_planned_paths:
         return
     
@@ -2381,7 +2232,7 @@ def release_completed_reservations(robot_index):
             release_pathway_reservation(pathway_name, robot_index)
 
 def findAnyComponentOnInputConveyor(input_conveyor_name):
-    # Find any produced component on the specified input conveyor that is not already attached to another robot
+    """Find any produced component on the specified input conveyor that is not already attached to another robot"""
     components = app.Components
     
     target_conveyor = app.findComponent(input_conveyor_name)
@@ -2478,7 +2329,7 @@ def relocateComponentOnConveyor(component_name, conveyor, robot):
         component.rebuild()
 
 def updateCarriedComponentPosition(robot, robot_index):
-    # Update the position of any component carried by this robot
+    """Update the position of any component carried by this robot"""
     carried_product_name = get_robot_property_value('CarriedProduct', robot_index)
     if carried_product_name and carried_product_name.strip() != '':
         component = app.findComponent(carried_product_name)
@@ -2507,7 +2358,7 @@ def distance(p1, p2):
     return ((p1['X'] - p2['X'])**2 + (p1['Y'] - p2['Y'])**2)**0.5
 
 def reserve_pathway(pathway_name, robot_index, duration=3.0):
-    # Reserve a pathway for a robot - shorter duration to reduce blocking
+    """Reserve a pathway for a robot - shorter duration to reduce blocking"""
     current_time = sim.SimTime
     if pathway_name not in pathway_reservations:
         pathway_reservations[pathway_name] = {}
@@ -2525,12 +2376,12 @@ def reserve_pathway(pathway_name, robot_index, duration=3.0):
     return True
 
 def release_pathway_reservation(pathway_name, robot_index):
-    # Release a pathway reservation when robot moves to next segment
+    """Release a pathway reservation when robot moves to next segment"""
     if pathway_name in pathway_reservations and robot_index in pathway_reservations[pathway_name]:
         del pathway_reservations[pathway_name][robot_index]
 
 def is_pathway_available(pathway_name, robot_index):
-    # Check if pathway is available for reservation
+    """Check if pathway is available for reservation"""
     current_time = sim.SimTime
     if pathway_name not in pathway_reservations:
         return True
@@ -2545,43 +2396,65 @@ def is_pathway_available(pathway_name, robot_index):
     return True
 
 def find_shortest_path_with_reservations(start, goal, pathways, robot_index):
-    # Enhanced pathfinding with collision-aware reservation system and conflict prediction
+    """Enhanced pathfinding with collision-aware reservation system and conflict prediction"""
     def heuristic(a, b):
         return distance(a, b)
 
     def get_neighbors(current):
         neighbors = []
         for p in pathways:
-            # Improved neighbor detection - consider pathways within reasonable distance
-            if p != current and distance(current, p) <= 15000:  # Increased range for better connectivity
+            if p != current and distance(current, p) <= 12000:
                 # Check if pathway can be reserved
                 if is_pathway_available(p['Name'], robot_index):
-                    neighbors.append(p)
+                    # PROACTIVE: Also check if other robots are planning to use this pathway
+                    conflict_predicted = False
+                    
+                    # Check if other robots have this pathway in their planned paths
+                    for other_robot_index, planned_path in robot_planned_paths.items():
+                        if other_robot_index != robot_index:
+                            for planned_pathway in planned_path:
+                                planned_name = planned_pathway.Name if hasattr(planned_pathway, 'Name') else planned_pathway
+                                if planned_name == p['Name']:
+                                    # Check timing - if other robot will be here soon, avoid
+                                    other_robot = next((r for r in robots if get_robot_index(r.Name) == other_robot_index), None)
+                                    if other_robot:
+                                        other_pos = getRobotPosition(other_robot)
+                                        pathway_pos = {'X': p['X'], 'Y': p['Y']}
+                                        distance_to_pathway = distance(
+                                            {'X': other_pos.X, 'Y': other_pos.Y}, 
+                                            pathway_pos
+                                        )
+                                        # If other robot is close to this pathway, avoid conflict
+                                        if distance_to_pathway < 2000:
+                                            conflict_predicted = True
+                                            break
+                    
+                    if not conflict_predicted:
+                        neighbors.append(p)
         return neighbors
 
     def calculate_path_cost(current, neighbor):
-        # Calculate cost - prioritize shortest path with minimal penalties
+        """Calculate cost with collision avoidance factors"""
         base_cost = distance(current, neighbor)
         
-        # Minimal penalty for currently occupied pathways only
+        # Add penalty for pathways with high robot density
         density_penalty = 0
         neighbor_pos = {'X': neighbor['X'], 'Y': neighbor['Y']}
         
         for robot in robots:
             robot_pos = getRobotPosition(robot)
             robot_dict_pos = {'X': robot_pos.X, 'Y': robot_pos.Y}
-            # Only penalize if robot is RIGHT on the pathway (reduced penalty and distance)
-            if distance(neighbor_pos, robot_dict_pos) < 1000:
-                density_penalty += 200  # Reduced penalty
+            if distance(neighbor_pos, robot_dict_pos) < 2000:
+                density_penalty += 500  # Penalty for crowded areas
         
-        # Minimal penalty for contested pathways
+        # Add penalty for pathways that other robots are targeting
         target_penalty = 0
         for other_robot in robots:
             other_robot_index = get_robot_index(other_robot.Name)
             if other_robot_index != robot_index:
                 other_next_location = get_robot_property_value('NextLocation', other_robot_index)
                 if other_next_location == neighbor['Name']:
-                    target_penalty += 300  # Reduced penalty - let collision avoidance handle it
+                    target_penalty += 1000  # High penalty for contested pathways
         
         return base_cost + density_penalty + target_penalty
 
@@ -2616,8 +2489,8 @@ def find_shortest_path_with_reservations(start, goal, pathways, robot_index):
 def OnRun():
     global robots, robot_states, comp, app, sim
 
-    # Wait for RobotQuantity to be set (reduced from 50 to 30 for faster startup)
-    for i in range(30):  # 3 seconds max
+    # Wait for RobotQuantity to be set
+    for i in range(50):  # 5 seconds max
         robot_quantity_prop = comp.getProperty('RobotQuantity')
         if robot_quantity_prop and robot_quantity_prop.Value > 0:
             clone_robots()
@@ -2627,7 +2500,7 @@ def OnRun():
     if not robots:
         return
 
-    delay(0.5)  # Reduced for faster startup
+    delay(2)
 
     # Fetch all pathways from the 3D world
     all_components = app.Components
@@ -2695,53 +2568,17 @@ def OnRun():
                 }
 
                 goal_pathway_name = get_robot_property_value('Target', robot_index)
-                
-                # Log Target reception for debugging (helps verify OPC UA communication)
-                if goal_pathway_name and goal_pathway_name != '':
-                    print("Robot " + str(robot_index) + " received Target: " + str(goal_pathway_name))
 
                 if not goal_pathway_name:
                     continue
                 
-                # FUZZY MATCHING: Handle name variations (e.g., "InputConveyor" -> "InputConveyor #1", "InputConveyor 2" vs "InputConveyor #2")
-                matched_conveyor_name = None
-                if goal_pathway_name not in conveyor_components:
-                    # Special case: "InputConveyor" without number should map to first input conveyor
-                    if goal_pathway_name == "InputConveyor":
-                        # Find the first input conveyor (InputConveyor #1 or InputConveyor)
-                        for conv_name in conveyor_components:
-                            if 'input' in conv_name.lower() and 'conveyor' in conv_name.lower():
-                                # Check if it's the first one (either no number, or #1, or 1)
-                                if '#1' in conv_name or conv_name == 'InputConveyor' or conv_name.endswith(' 1'):
-                                    matched_conveyor_name = conv_name
-                                    print("Robot " + str(robot_index) + " mapped 'InputConveyor' to '" + conv_name + "'")
-                                    break
-                        
-                        # If no #1 found, just take the first input conveyor
-                        if not matched_conveyor_name:
-                            for conv_name in conveyor_components:
-                                if 'input' in conv_name.lower() and 'conveyor' in conv_name.lower():
-                                    matched_conveyor_name = conv_name
-                                    print("Robot " + str(robot_index) + " mapped 'InputConveyor' to first available '" + conv_name + "'")
-                                    break
-                    
-                    # General fuzzy matching - normalize names for comparison
-                    if not matched_conveyor_name:
-                        goal_normalized = goal_pathway_name.replace('#', '').replace(' ', '').lower()
-                        for conv_name in conveyor_components:
-                            conv_normalized = conv_name.replace('#', '').replace(' ', '').lower()
-                            if goal_normalized == conv_normalized:
-                                matched_conveyor_name = conv_name
-                                print("Robot " + str(robot_index) + " matched '" + goal_pathway_name + "' to '" + conv_name + "'")
-                                break
-                else:
-                    matched_conveyor_name = goal_pathway_name
 
-                if matched_conveyor_name:
-                    conveyor = conveyors.get(matched_conveyor_name)
+
+                if goal_pathway_name in conveyor_components:
+                    conveyor = conveyors[goal_pathway_name]
                     if conveyor:
                         goal_pathway = {
-                            "Name": matched_conveyor_name,  # Use matched name
+                            "Name": goal_pathway_name,
                             "X": conveyor.WorldPositionMatrix.P.X,
                             "Y": conveyor.WorldPositionMatrix.P.Y,
                             "Rz": 0,
@@ -2749,14 +2586,11 @@ def OnRun():
                             "AreaWidth": conveyor.getProperty('ConveyorWidth').Value if conveyor.getProperty('ConveyorWidth') else 0
                         }
                     else:
-                        print("Robot " + str(robot_index) + " ERROR: Conveyor component '" + matched_conveyor_name + "' not found")
                         continue
                 else:
-                    # Try to find in pathways
                     goal_pathway = next((p for p in pathways_dict if p['Name'] == goal_pathway_name), None)
 
                 if not goal_pathway:
-                    print("Robot " + str(robot_index) + " ERROR: Target '" + goal_pathway_name + "' not found in conveyors or pathways")
                     continue
 
                 # Use reservation-based pathfinding
@@ -2764,13 +2598,11 @@ def OnRun():
 
                 if shortest_path:
                     # Separate pathways from conveyors - conveyors are destinations, not pathways to traverse
-                    # Use matched_conveyor_name if available, otherwise goal_pathway_name
-                    actual_target_name = matched_conveyor_name if matched_conveyor_name else goal_pathway_name
                     pathways_robot = [app.findComponent(p['Name']) for p in shortest_path[1:] if p['Name'] not in conveyor_components]
                     conveyor_destination = None
                     
-                    if actual_target_name in conveyor_components:
-                        conveyor_destination = conveyors[actual_target_name]
+                    if goal_pathway_name in conveyor_components:
+                        conveyor_destination = conveyors[goal_pathway_name]
 
                     # Try to reserve the pathway portion only (excluding conveyor destination)
                     if reserve_planned_path(robot_index, pathways_robot):
@@ -2783,16 +2615,13 @@ def OnRun():
                         robot_states[robot_index]['current_pathway_index'] = 0
                         robot_states[robot_index]['moving'] = True
                         robot_states[robot_index]['vehicle_initialized'] = False  # Reset vehicle for new journey
-                        print("Robot " + str(robot_index) + " starting movement to " + actual_target_name + " via " + str(len(pathways_robot)) + " pathways")
                     else:
                         # Path reservation failed - robot will wait and try again
-                        print("Robot " + str(robot_index) + " path reservation failed - waiting")
                         set_robot_property('Stop', True, robot_index)
                         # Clear any previous conveyor destination
                         robot_states[robot_index]['conveyor_destination'] = None
                 else:
                     # No path found - robot will wait
-                    print("Robot " + str(robot_index) + " ERROR: No path found to " + goal_pathway_name)
                     set_robot_property('Stop', True, robot_index)
                     # Clear any previous conveyor destination
                     robot_states[robot_index]['conveyor_destination'] = None
@@ -2816,80 +2645,33 @@ def OnRun():
             current_location = get_robot_property_value('Location', robot_index)
             
             # Update robot location when near target conveyors for OPC-UA (immediate update)
-            if goal_pathway_name:
-                # Apply same fuzzy matching for location updates
-                target_conveyor_name = goal_pathway_name
-                if goal_pathway_name not in conveyor_components:
-                    # Map "InputConveyor" to first input conveyor
-                    if goal_pathway_name == "InputConveyor":
-                        for conv_name in conveyor_components:
-                            if 'input' in conv_name.lower() and 'conveyor' in conv_name.lower():
-                                if '#1' in conv_name or conv_name == 'InputConveyor' or conv_name.endswith(' 1'):
-                                    target_conveyor_name = conv_name
-                                    break
-                        if target_conveyor_name == goal_pathway_name:
-                            for conv_name in conveyor_components:
-                                if 'input' in conv_name.lower() and 'conveyor' in conv_name.lower():
-                                    target_conveyor_name = conv_name
-                                    break
-                    else:
-                        # Try fuzzy matching
-                        goal_normalized = goal_pathway_name.replace('#', '').replace(' ', '').lower()
-                        for conv_name in conveyor_components:
-                            conv_normalized = conv_name.replace('#', '').replace(' ', '').lower()
-                            if goal_normalized == conv_normalized:
-                                target_conveyor_name = conv_name
-                                break
-                
-                if target_conveyor_name in conveyor_components:
-                    target_conveyor = conveyors.get(target_conveyor_name)
-                    if target_conveyor:
-                        conveyor_pos = target_conveyor.WorldPositionMatrix.P
-                        distance_to_conveyor = vector_length(vector_subtract(robot_pos, conveyor_pos))
-                        
-                        # Set location when robot is close to conveyor (for OPC-UA monitoring)
-                        if distance_to_conveyor < 1500:
-                            if current_location != target_conveyor_name:
-                                set_robot_property('Location', target_conveyor_name, robot_index)
-                                set_robot_property('NextLocation', '', robot_index)
+            if goal_pathway_name and goal_pathway_name in conveyor_components:
+                target_conveyor = conveyors.get(goal_pathway_name)
+                if target_conveyor:
+                    conveyor_pos = target_conveyor.WorldPositionMatrix.P
+                    distance_to_conveyor = vector_length(vector_subtract(robot_pos, conveyor_pos))
+                    
+                    # Set location when robot is close to conveyor (for OPC-UA monitoring)
+                    if distance_to_conveyor < 1500:
+                        if current_location != goal_pathway_name:
+                            set_robot_property('Location', goal_pathway_name, robot_index)
+                            set_robot_property('NextLocation', '', robot_index)
 
             # Only handle component pickup/drop-off when robot is at conveyor destination (not moving)
             if not robot_moving and current_location in conveyor_components:
-                # Apply fuzzy matching for goal_pathway_name
-                target_conveyor_name_for_pickup = goal_pathway_name
-                if goal_pathway_name and goal_pathway_name not in conveyor_components:
-                    if goal_pathway_name == "InputConveyor":
-                        for conv_name in conveyor_components:
-                            if 'input' in conv_name.lower() and 'conveyor' in conv_name.lower():
-                                if '#1' in conv_name or conv_name == 'InputConveyor' or conv_name.endswith(' 1'):
-                                    target_conveyor_name_for_pickup = conv_name
-                                    break
-                        if target_conveyor_name_for_pickup == goal_pathway_name:
-                            for conv_name in conveyor_components:
-                                if 'input' in conv_name.lower() and 'conveyor' in conv_name.lower():
-                                    target_conveyor_name_for_pickup = conv_name
-                                    break
-                
-                if is_input_conveyor(target_conveyor_name_for_pickup):
+                if is_input_conveyor(goal_pathway_name):
                     # Check if robot is at the target conveyor (for pickup)
-                    target_conveyor = conveyors.get(target_conveyor_name_for_pickup)
+                    target_conveyor = conveyors.get(goal_pathway_name)
                     carried_product = get_robot_property_value('CarriedProduct', robot_index)
                     
                     # Check if robot is not already carrying something and is at the right conveyor
-                    # Match current_location with target (both may need fuzzy matching)
-                    location_matches = (current_location == target_conveyor_name_for_pickup or 
-                                       current_location == goal_pathway_name or
-                                       (current_location.replace('#', '').replace(' ', '').lower() == 
-                                        target_conveyor_name_for_pickup.replace('#', '').replace(' ', '').lower()))
-                    
-                    if target_conveyor and (not carried_product or carried_product == '') and location_matches:
+                    if target_conveyor and (not carried_product or carried_product == '') and current_location == goal_pathway_name:
                         conveyor_pos = target_conveyor.WorldPositionMatrix.P
                         distance_to_conveyor = vector_length(vector_subtract(robot_pos, conveyor_pos))
                         
                         if distance_to_conveyor < 2000:  # Within pickup range at destination
                             # Find any produced component on this input conveyor, regardless of product type
-                            # Use the matched conveyor name for finding components
-                            component_name = findAnyComponentOnInputConveyor(target_conveyor_name_for_pickup)
+                            component_name = findAnyComponentOnInputConveyor(goal_pathway_name)
                             if component_name:
                                 # Double-check that no other robot is currently carrying this component
                                 component = app.findComponent(component_name)
@@ -2930,15 +2712,7 @@ def OnRun():
         delay(0.1)
 
 def move_robot_incremental(robot, vehicle, robot_index, robot_state):
-    # Smooth robot movement - prevents teleporting and freezing
-    
-    # Check if robot is enabled - stop movement if disabled
-    # Default to True if property doesn't exist (None) - only False explicitly disables
-    robot_enabled = get_robot_property_value('Enabled', robot_index)
-    if robot_enabled == False:  # Explicitly check for False, not None
-        robot_state['moving'] = False
-        return
-    
+    """Smooth robot movement - prevents teleporting and freezing"""
     if not robot_state['moving'] or not vehicle:
         return
 
@@ -2980,7 +2754,7 @@ def move_robot_incremental(robot, vehicle, robot_index, robot_state):
                         
                         # Use the correct vehicle movement method
                         vehicle.clearMove()
-                        vehicle.MaxSpeed = 1200
+                        vehicle.MaxSpeed = 800
                         vehicle.addControlPoint(adjusted_target)
                         robot_state['vehicle_initialized'] = True
                 
@@ -2989,62 +2763,28 @@ def move_robot_incremental(robot, vehicle, robot_index, robot_state):
                     robot_state['last_avoidance_update'] = 0
                 
                 current_time = sim.SimTime if sim else 0
-                if current_time - robot_state['last_avoidance_update'] > 2.0:  # Update every 2 seconds (reduced frequency)
+                if current_time - robot_state['last_avoidance_update'] > 1.0:  # Update every 1 second
                     robot_state['vehicle_initialized'] = False  # Force recalculation with current avoidance
                     robot_state['last_avoidance_update'] = current_time
                 
-                # Enhanced stuck detection with repath capability
+                # Check if robot is stuck - if so, re-initialize vehicle
+                # Simple check: if robot is far from destination and hasn't moved recently
                 if distance_to_conveyor > 200:
-                    # Initialize stuck detection state
-                    if not hasattr(robot_state, 'stuck_detection'):
-                        robot_state['stuck_detection'] = {
-                            'prev_pos': robot_pos,
-                            'stuck_timer': 0,
-                            'repath_attempts': 0,
-                            'last_repath_time': 0
-                        }
-                    
-                    stuck_data = robot_state['stuck_detection']
-                    current_time = sim.SimTime if sim else 0
-                    
-                    # Check if robot has moved
-                    movement = vector_length(vector_subtract(robot_pos, stuck_data['prev_pos']))
-                    
-                    if movement < 100:  # Very little movement
-                        stuck_data['stuck_timer'] += 0.1
-                        
-                        time_since_repath = current_time - stuck_data['last_repath_time']
-                        
-                        # Escalating response to being stuck
-                        if stuck_data['stuck_timer'] > 3.0 and time_since_repath > 5.0:
-                            if stuck_data['repath_attempts'] < 2:
-                                # Try to replan path
-                                print("Robot " + str(robot_index) + " stuck - attempting repath")
-                                robot_state['vehicle_initialized'] = False
-                                stuck_data['repath_attempts'] += 1
-                                stuck_data['last_repath_time'] = current_time
-                                stuck_data['stuck_timer'] = 0
-                                
-                                # Clear and recalculate path
-                                if robot_index in robot_planned_paths:
-                                    for pathway in robot_planned_paths[robot_index]:
-                                        pathway_name = pathway.Name if hasattr(pathway, 'Name') else pathway
-                                        release_pathway_reservation(pathway_name, robot_index)
-                                    del robot_planned_paths[robot_index]
-                            else:
-                                # After multiple failed attempts, reset completely
-                                print("Robot " + str(robot_index) + " stuck after repath attempts - resetting")
-                                set_robot_property('Target', '', robot_index)
-                                robot_state['moving'] = False
-                                stuck_data['repath_attempts'] = 0
-                                stuck_data['stuck_timer'] = 0
+                    # Store previous position to check if robot is stuck
+                    if not hasattr(robot_state, 'prev_pos'):
+                        robot_state['prev_pos'] = robot_pos
+                        robot_state['stuck_timer'] = 0
                     else:
-                        # Robot is moving, reset timer
-                        stuck_data['stuck_timer'] = 0
-                        if movement > 500:  # Significant movement
-                            stuck_data['repath_attempts'] = max(0, stuck_data['repath_attempts'] - 1)
-                    
-                    stuck_data['prev_pos'] = robot_pos
+                        # Check if robot has moved
+                        prev_distance = vector_length(vector_subtract(robot_pos, robot_state['prev_pos']))
+                        if prev_distance < 50:  # Robot hasn't moved much
+                            robot_state['stuck_timer'] = robot_state.get('stuck_timer', 0) + 0.1
+                            if robot_state['stuck_timer'] > 2.0:  # Stuck for 2 seconds
+                                robot_state['vehicle_initialized'] = False
+                                robot_state['stuck_timer'] = 0
+                        else:
+                            robot_state['stuck_timer'] = 0
+                        robot_state['prev_pos'] = robot_pos
         else:
             # No conveyor destination - robot has finished its journey
             robot_state['moving'] = False
@@ -3098,29 +2838,7 @@ def move_robot_incremental(robot, vehicle, robot_index, robot_state):
         
         return 0 <= along_path <= total_length and across_path <= max_width/2
 
-    current_in_pathway = is_point_in_pathway(robot_pos, current_pathway)
-    
-    # Path continuity check: ensure robot hasn't backtracked
-    if not hasattr(robot_state, 'last_pathway_position'):
-        robot_state['last_pathway_position'] = robot_pos
-        robot_state['cumulative_distance'] = 0
-    else:
-        # Calculate distance traveled since last check
-        distance_moved = vector_length(vector_subtract(robot_pos, robot_state['last_pathway_position']))
-        robot_state['cumulative_distance'] += distance_moved
-        robot_state['last_pathway_position'] = robot_pos
-        
-        # If robot has barely moved or moved backwards significantly, recalculate path
-        if robot_state['cumulative_distance'] < 200 and robot_state.get('movement_check_cycles', 0) > 10:
-            # Robot may be stuck or confused - force path recalculation
-            robot_state['vehicle_initialized'] = False
-            robot_state['cumulative_distance'] = 0
-            robot_state['movement_check_cycles'] = 0
-        else:
-            robot_state['movement_check_cycles'] = robot_state.get('movement_check_cycles', 0) + 1
-            if robot_state['cumulative_distance'] > 1000:  # Reset counter after significant movement
-                robot_state['movement_check_cycles'] = 0
-    
+    current_in_pathway = is_point_in_pathway(robot_pos, current_pathway)  
     next_in_pathway = False
     
     # FIXED: Different logic for pathway-to-pathway vs pathway-to-conveyor transitions
@@ -3145,48 +2863,32 @@ def move_robot_incremental(robot, vehicle, robot_index, robot_state):
         # Calculate the planned exit point for this pathway
         planned_exit_point, _ = calculate_smart_entry_exit_points(robot_pos, current_pathway, next_pathway)
         
-        # Allow transition when robot is reasonably close to exit point (more lenient)
+        # Only allow transition if robot is VERY close to the planned exit point
         distance_to_exit = vector_length(vector_subtract(robot_pos, planned_exit_point))
         
-        # More lenient transition criteria for smoother navigation
-        if distance_to_exit < 1200:  # Increased from 800 to 1200 units
+        # Strict transition criteria - robot must be at the exit point
+        if distance_to_exit < 800:  # Must be within 800 units of exit point
             if next_in_pathway:
                 can_transition_direct = True
             else:
                 # Check if robot can transition directly to next pathway
                 can_transition_direct = can_transition_directly(robot_pos, current_pathway, next_pathway, 1200)
         
-        # VALIDATE path before transition - prevent entering wrong pathways
+        # ONLY transition if robot has reached the proper exit point
         if can_transition_direct and distance_to_exit < 800:
-            # Verify robot is actually moving TOWARD next pathway, not away from it
-            next_pos = next_pathway.WorldPositionMatrix.P
-            robot_to_next = vector_subtract(next_pos, robot_pos)
-            distance_to_next_center = vector_length(robot_to_next)
-            
-            # Get robot's current movement direction
-            robot_direction = get_movement_direction(robot, robot_index)
-            if robot_direction:
-                # Calculate if robot is moving toward or away from next pathway
-                movement_toward_next = robot_to_next.X * robot_direction.X + robot_to_next.Y * robot_direction.Y
-                
-                # Only transition if clearly moving toward next pathway AND close to it
-                if movement_toward_next > 0 or distance_to_next_center < 1500:
-                    set_robot_property('Location', next_pathway.Name, robot_index)
-                    if i + 2 < len(pathways):
-                        set_robot_property('NextLocation', pathways[i + 2].Name, robot_index)
-                    else:
-                        # Check if there's a conveyor destination
-                        conveyor_destination = robot_state.get('conveyor_destination')
-                        if conveyor_destination:
-                            set_robot_property('NextLocation', conveyor_destination.Name, robot_index)
-                        else:
-                            set_robot_property('NextLocation', '', robot_index)
-                    robot_state['current_pathway_index'] += 1
-                    robot_state['vehicle_initialized'] = False
-                    return
+            set_robot_property('Location', next_pathway.Name, robot_index)
+            if i + 2 < len(pathways):
+                set_robot_property('NextLocation', pathways[i + 2].Name, robot_index)
+            else:
+                # Check if there's a conveyor destination
+                conveyor_destination = robot_state.get('conveyor_destination')
+                if conveyor_destination:
+                    set_robot_property('NextLocation', conveyor_destination.Name, robot_index)
                 else:
-                    # Robot is moving away from next pathway - don't transition yet
-                    return
+                    set_robot_property('NextLocation', '', robot_index)
+            robot_state['current_pathway_index'] += 1
+            robot_state['vehicle_initialized'] = False
+            return
     else:
         # CRITICAL FIX: When this is the LAST pathway before conveyor destination
         # Robot should complete the ENTIRE pathway, not try to exit early toward conveyor
@@ -3557,7 +3259,7 @@ def move_robot_incremental(robot, vehicle, robot_index, robot_state):
         set_robot_property('NextLocation', '', robot_index)
 
 def OnSimulationUpdate(time):
-    # Optimized collision management - reduced frequency to prevent stuttering and lag
+    """Optimized collision management - reduced frequency to prevent stuttering and lag"""
     # Further reduce update frequency to prevent excessive collision checking and improve performance
     if not hasattr(OnSimulationUpdate, 'last_update'):
         OnSimulationUpdate.last_update = 0
