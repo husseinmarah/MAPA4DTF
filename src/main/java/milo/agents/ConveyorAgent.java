@@ -23,6 +23,7 @@ public class ConveyorAgent extends Agent {
     // =====================================================================
     private static final int AGENT_INTERVAL = 1000; // Fixed interval
     private UaVariableNode producedNode;
+    private UaVariableNode enabledNode;
     private int conveyorId;
     private ConveyorAgent myConveyorReference; // Reference to conveyor in the namespace
     
@@ -37,6 +38,7 @@ public class ConveyorAgent extends Agent {
     // =====================================================================
     private FederationSecurityManager securityManager;
     private SecurityContext securityContext; // Keycloak authentication context
+    private boolean enabledConveyor = false; // OPA authorization status
     
     // Default constructor for JADE agent creation
     public ConveyorAgent() {
@@ -46,6 +48,13 @@ public class ConveyorAgent extends Agent {
     // Legacy constructor for backward compatibility
     public ConveyorAgent(UaVariableNode producedNode, int conveyorId) {
         this.producedNode = producedNode;
+        this.conveyorId = conveyorId;
+    }
+    
+    // Constructor with enabled node
+    public ConveyorAgent(UaVariableNode producedNode, UaVariableNode enabledNode, int conveyorId) {
+        this.producedNode = producedNode;
+        this.enabledNode = enabledNode;
         this.conveyorId = conveyorId;
     }
 
@@ -62,6 +71,7 @@ public class ConveyorAgent extends Agent {
             if (conveyorId > 0 && conveyorId <= CustomNamespace.inputConveyors.size()) {
                 myConveyorReference = CustomNamespace.inputConveyors.get(conveyorId - 1);
                 this.producedNode = myConveyorReference.producedNode;
+                this.enabledNode = myConveyorReference.enabledNode;
             }
         }
         
@@ -110,6 +120,9 @@ public class ConveyorAgent extends Agent {
             securityManager.linkAgentToContext(getLocalName(), keycloakUsername);
         }
         
+        // Initialize the enabled node with default value (false)
+        initializeEnabledNode();
+        
         // Add small delay to ensure ProductionAgentManager is ready
         addBehaviour(new jade.core.behaviours.WakerBehaviour(this, 2000) {
             @Override
@@ -136,13 +149,93 @@ public class ConveyorAgent extends Agent {
     TickerBehaviour conveyorBehavior = new TickerBehaviour(this, AGENT_INTERVAL) {
         @Override
         public void onTick() {
-            // Monitor and manage this conveyor's production
-            if (myConveyorReference != null) {
+            // 0. Check OPA authorization and update enabled status
+            updateConveyorEnabledStatus();
+            
+            // Monitor and manage this conveyor's production only if enabled
+            if (myConveyorReference != null && enabledConveyor) {
                 monitorConveyorProduction();
             }
         }
     };
 
+    /**
+     * Initialize the enabled node with default value (false)
+     * This ensures the OPC-UA variable has a known initial state
+     */
+    private void initializeEnabledNode() {
+        if (enabledNode != null) {
+            try {
+                // Set initial value to false (disabled by default until OPA authorizes)
+                enabledNode.setValue(new DataValue(new Variant(false)));
+                System.out.println("┌─ CONVEYOR INITIALIZATION ────────────────────────");
+                System.out.println("│  Conveyor: " + getLocalName());
+                System.out.println("│  Enabled Node initialized to: false");
+                System.out.println("│  Status: Waiting for OPA authorization");
+                System.out.println("└──────────────────────────────────────────────────");
+            } catch (Exception e) {
+                System.err.println("❌ Error initializing enabled node for " + getLocalName() + ": " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Update conveyor enabled status based on OPA authorization
+     * If OPA allows the conveyor to operate, set enabled = true
+     * Otherwise, set enabled = false
+     */
+    private void updateConveyorEnabledStatus() {
+        try {
+            if (securityManager == null) {
+                enabledConveyor = false;
+                return;
+            }
+            
+            // Refresh token if needed
+            boolean tokenRefreshed = securityManager.refreshTokenIfNeeded(getLocalName());
+            if (tokenRefreshed) {
+                System.out.println("🔄 " + getLocalName() + " - Token refreshed successfully");
+            }
+            
+            // Check if agent can access conveyor operation service
+            boolean authorized = securityManager.canAccessService(getLocalName(), "conveyor_access");
+            
+            // Update the enabled status based on authorization
+            if (authorized != enabledConveyor) {
+                enabledConveyor = authorized;
+                
+                // Write to OPC-UA node
+                if (enabledNode != null) {
+                    try {
+                        enabledNode.setValue(new DataValue(new Variant(enabledConveyor)));
+                    } catch (Exception e) {
+                        System.err.println("❌ Error writing enabled status to OPC-UA for " + getLocalName() + ": " + e.getMessage());
+                    }
+                }
+                
+                if (authorized) {
+                    System.out.println("┌─ CONVEYOR STATUS UPDATE ─────────────────────────");
+                    System.out.println("│  ✅ ENABLED");
+                    System.out.println("│  Time:     " + java.time.Instant.now());
+                    System.out.println("│  Conveyor: " + getLocalName());
+                    System.out.println("│  Status:   OPA authorization granted");
+                    System.out.println("└──────────────────────────────────────────────────");
+                } else {
+                    System.out.println("┌─ CONVEYOR STATUS UPDATE ─────────────────────────");
+                    System.out.println("│  🚫 DISABLED");
+                    System.out.println("│  Time:     " + java.time.Instant.now());
+                    System.out.println("│  Conveyor: " + getLocalName());
+                    System.out.println("│  Status:   OPA authorization denied");
+                    System.out.println("└──────────────────────────────────────────────────");
+                }
+            }
+            
+        } catch (Exception e) {
+            System.err.println("⚠️ " + getLocalName() + " - Authorization check error: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
     private void monitorConveyorProduction() {
         // This method can be extended to add conveyor-specific logic
         // For now, it maintains the same logic as the original implementation

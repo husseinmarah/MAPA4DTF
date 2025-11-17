@@ -39,10 +39,13 @@ public class RobotAgent extends Agent {
     private int robotId; // Specific robot this agent manages
     private RobotTemplate myRobot; // Reference to this agent's robot
     
-    // Round-robin task distribution counter (shared across all robot agents)
-    private static int lastAssignedRobotId = -1;
+    // Task distribution tracking (shared across all robot agents)
+    private static int taskCounter = 0; // Global task counter for fair distribution
     private static final Object assignmentLock = new Object();
     private int consecutiveIdleCycles = 0; // Track how long this robot has been idle
+    
+    // Priority-based collision resolution
+    private static final boolean USE_PRIORITY_RESOLUTION = true; // Enable priority-based task assignment
 
     // =====================================================================
     // FEDERATION SUPPORT
@@ -337,6 +340,7 @@ public class RobotAgent extends Agent {
                     System.out.println("│  Time:   " + java.time.Instant.now());
                     System.out.println("│  Robot:  " + getLocalName());
                     System.out.println("│  Status: OPA authorization granted");
+                    System.out.println("│  Policy: robot_operation service access allowed");
                     System.out.println("└──────────────────────────────────────────────────");
                 } else {
                     System.out.println("┌─ ROBOT STATUS UPDATE ────────────────────────────");
@@ -344,6 +348,7 @@ public class RobotAgent extends Agent {
                     System.out.println("│  Time:   " + java.time.Instant.now());
                     System.out.println("│  Robot:  " + getLocalName());
                     System.out.println("│  Status: OPA authorization denied");
+                    System.out.println("│  Policy: robot_operation service access blocked");
                     System.out.println("└──────────────────────────────────────────────────");
                 }
             }
@@ -415,119 +420,211 @@ public class RobotAgent extends Agent {
             return; // Robot disabled - cannot accept conveyor tasks
         }
         
-        // Check both input conveyors for product availability
-        for (int i = 0; i < CustomNamespace.getInputConveyors().size(); i++) {
-            ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(i);
-            if (conveyor.getProduced()) {
-                String targetName = getConveyorTargetName(i + 1);
-                String conveyorAgentName = "ConveyorAgent" + (i + 1);
-                
-                // OPA CHECK: Can this robot communicate with the conveyor?
-                if (securityManager != null && securityManager.canCommunicateWith(getLocalName(), conveyorAgentName)) {
-                    System.out.println("🔗 " + getLocalName() + " ↔ " + conveyorAgentName + " (OPA: Communication allowed)");
-                    setRobotTarget(targetName);
-                } else {
-                    System.out.println("🚫 " + getLocalName() + " ✗ " + conveyorAgentName + " (OPA: Communication blocked - robot not authorized for this conveyor)");
+        // Only check if robot is available (idle or returning to idle, not carrying product)
+        boolean hasNoTarget = myRobot.getTarget().isEmpty();
+        boolean returningToIdle = myRobot.getTarget().startsWith("Idle Location");
+        boolean isAvailable = (hasNoTarget || returningToIdle) && !myRobot.isCarryingProduct();
+        
+        if (!isAvailable) {
+            return; // Robot is busy
+        }
+        
+        // Check both input conveyors for product availability using fair distribution
+        synchronized (assignmentLock) {
+            for (int i = 0; i < CustomNamespace.getInputConveyors().size(); i++) {
+                ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(i);
+                if (conveyor.getProduced()) {
+                    String targetName = getConveyorTargetName(i + 1);
+                    String conveyorAgentName = "ConveyorAgent" + (i + 1);
+                    
+                    // Check if this conveyor already has a robot assigned
+                    boolean alreadyAssigned = false;
+                    for (RobotTemplate robot : CustomNamespace.robots) {
+                        if (robot.getTarget().equals(targetName) && !robot.isCarryingProduct()) {
+                            alreadyAssigned = true;
+                            break;
+                        }
+                    }
+                    
+                    if (alreadyAssigned) {
+                        continue; // Skip this conveyor, already assigned
+                    }
+                    
+                    // OPA CHECK: Can this robot communicate with the conveyor?
+                    if (securityManager != null && securityManager.canCommunicateWith(getLocalName(), conveyorAgentName)) {
+                        // Use priority-based task assignment
+                        assignTaskWithPriority(targetName, conveyorAgentName);
+                        break; // Only assign one task per cycle
+                    } else {
+                        System.out.println("🚫 " + getLocalName() + " ✗ " + conveyorAgentName + " (OPA: Communication blocked - robot not authorized for this conveyor)");
+                    }
                 }
             }
         }
     }
 
     private String getConveyorTargetName(int conveyorNumber) {
-        if (conveyorNumber == 1) {
-            return "InputConveyor";
-        } else {
-            return "InputConveyor #" + conveyorNumber;
-        }
+        // Always use consistent naming: "InputConveyor #1", "InputConveyor #2", etc.
+        // This matches the actual conveyor names in the Visual Components simulation
+        return "InputConveyor #" + conveyorNumber;
     }
 
     private boolean isInputConveyorTarget(String target) {
         return target.equals("InputConveyor") || target.startsWith("InputConveyor #");
     }
 
-    private void setRobotTarget(String target) {
-        // First, check if any robot is already assigned to this target and still needs to pick up
-        for (RobotTemplate robot : CustomNamespace.robots) {
-            if (robot.getTarget().equals(target) && !robot.isCarryingProduct()) {
-                return; // Only skip if robot is still going to this conveyor for pickup
-            }
-        }
-
+    /**
+     * Assign task to robot using priority-based collision resolution
+     * Higher priority robots get preference when multiple robots compete for the same task
+     * Ensures all robots get tasks from both conveyors using round-robin rotation
+     */
+    private void assignTaskWithPriority(String targetName, String conveyorAgentName) {
         try {
-            // Parse input conveyor locations and idle locations using SystemConfig.COMPONENT_PROPERTIES
+            // Get all available robots that can communicate with this conveyor
+            List<RobotCandidate> candidates = new ArrayList<>();
+            
+            for (RobotTemplate robot : CustomNamespace.robots) {
+                int robotIndex = CustomNamespace.robots.indexOf(robot);
+                String robotAgentName = "RobotAgent" + (robotIndex + 1);
+                
+                // Check if robot is available
+                boolean hasNoTarget = robot.getTarget().isEmpty();
+                boolean returningToIdle = robot.getTarget().startsWith("Idle Location");
+                boolean isEnabled = robot.isEnabled();
+                boolean isAvailable = isEnabled && (hasNoTarget || returningToIdle) && !robot.isCarryingProduct();
+                
+                if (!isAvailable) continue;
+                
+                // Check OPA authorization
+                if (securityManager != null && !securityManager.canCommunicateWith(robotAgentName, conveyorAgentName)) {
+                    continue; // Skip robots not authorized for this conveyor
+                }
+                
+                // Calculate distance to conveyor
+                double distance = calculateDistanceToConveyor(robotIndex, targetName);
+                
+                candidates.add(new RobotCandidate(robot, robotIndex, robot.getPriority(), distance));
+            }
+            
+            if (candidates.isEmpty()) {
+                return; // No available robots
+            }
+            
+            // Sort candidates by priority (descending), then by distance (ascending)
+            // This ensures higher priority robots get preference in collision resolution
+            Collections.sort(candidates, (a, b) -> {
+                if (USE_PRIORITY_RESOLUTION) {
+                    // First compare by priority (higher priority wins)
+                    int priorityCompare = Integer.compare(b.priority, a.priority);
+                    if (priorityCompare != 0) {
+                        return priorityCompare;
+                    }
+                }
+                // If priorities are equal (or priority resolution disabled), compare by distance
+                return Double.compare(a.distance, b.distance);
+            });
+            
+            // Apply round-robin fairness: rotate through candidates to ensure all robots get tasks
+            // Use task counter to determine which robot should get the task
+            RobotCandidate selected;
+            if (candidates.size() > 1) {
+                // Round-robin: select robot based on task counter
+                int selectionIndex = taskCounter % candidates.size();
+                selected = candidates.get(selectionIndex);
+                taskCounter++;
+            } else {
+                // Only one candidate available
+                selected = candidates.get(0);
+                taskCounter++;
+            }
+            
+            // Assign task to selected robot
+            selected.robot.setTarget(targetName);
+            consecutiveIdleCycles = 0; // Reset idle counter
+            
+            System.out.println("┌─ TASK ASSIGNMENT (Priority-Based) ───────────────");
+            System.out.println("│  ✅ ASSIGNED");
+            System.out.println("│  Time:      " + java.time.Instant.now());
+            System.out.println("│  Robot:     RobotAgent" + (selected.robotIndex + 1));
+            System.out.println("│  Priority:  " + selected.priority);
+            System.out.println("│  Distance:  " + String.format("%.2f", selected.distance));
+            System.out.println("│  Target:    " + targetName);
+            System.out.println("│  Conveyor:  " + conveyorAgentName);
+            System.out.println("│  Method:    " + (USE_PRIORITY_RESOLUTION ? "Priority+RoundRobin" : "Distance+RoundRobin"));
+            System.out.println("│  Candidates: " + candidates.size() + " available robots");
+            System.out.println("└──────────────────────────────────────────────────");
+            
+        } catch (Exception e) {
+            System.err.println("Error in assignTaskWithPriority: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Helper class to store robot candidate information for task assignment
+     */
+    private static class RobotCandidate {
+        final RobotTemplate robot;
+        final int robotIndex;
+        final int priority;
+        final double distance;
+        
+        RobotCandidate(RobotTemplate robot, int robotIndex, int priority, double distance) {
+            this.robot = robot;
+            this.robotIndex = robotIndex;
+            this.priority = priority;
+            this.distance = distance;
+        }
+    }
+    
+    /**
+     * Calculate distance from robot's idle location to target conveyor
+     */
+    private double calculateDistanceToConveyor(int robotIndex, String targetName) {
+        try {
+            // Parse input conveyor locations and idle locations
             String inputConveyorFile = null;
             String idleFile = null;
             for (SystemConfig.ComponentProperty prop : SystemConfig.COMPONENT_PROPERTIES) {
-                if (prop == null || prop.name == null || prop.jsonFile == null) continue; // Skip null properties
+                if (prop == null || prop.name == null || prop.jsonFile == null) continue;
                 if (prop.name.equals("inputconveyorProperties")) inputConveyorFile = prop.jsonFile;
                 if (prop.name.equals("idleProperties")) idleFile = prop.jsonFile;
             }
+            
             JSONParser parser = new JSONParser();
             JSONArray inputConveyorLocations = (JSONArray) parser.parse(new FileReader(inputConveyorFile));
             JSONArray idleLocations = (JSONArray) parser.parse(new FileReader(idleFile));
-
-            // Find the target conveyor coordinates
-            JSONObject targetConveyor = null;
+            
+            // Find conveyor index
             int conveyorIndex = -1;
-
-            // More generic approach to find conveyor index
-            if (target.equals("InputConveyor")) {
+            if (targetName.equals("InputConveyor")) {
                 conveyorIndex = 0;
-            } else if (target.startsWith("InputConveyor #")) {
-                try {
-                    String numberStr = target.substring("InputConveyor #".length());
-                    int conveyorNumber = Integer.parseInt(numberStr);
-                    conveyorIndex = conveyorNumber - 1; // Convert to 0-based index
-                } catch (NumberFormatException e) {
-                    System.err.println("Error parsing conveyor number from target: " + target);
-                }
+            } else if (targetName.startsWith("InputConveyor #")) {
+                String numberStr = targetName.substring("InputConveyor #".length());
+                conveyorIndex = Integer.parseInt(numberStr) - 1;
+            } else if (targetName.matches("InputConveyor\\s+\\d+")) {
+                // Handle "InputConveyor 1" format (space instead of #)
+                String numberStr = targetName.replaceAll("InputConveyor\\s+", "");
+                conveyorIndex = Integer.parseInt(numberStr) - 1;
             }
-
-            if (conveyorIndex >= 0 && conveyorIndex < inputConveyorLocations.size()) {
-                targetConveyor = (JSONObject) inputConveyorLocations.get(conveyorIndex);
+            
+            if (conveyorIndex < 0 || conveyorIndex >= inputConveyorLocations.size()) {
+                return Double.MAX_VALUE;
             }
-
-            if (targetConveyor == null) return;
-
-            // Find closest available robot
-            RobotTemplate closestRobot = null;
-            double minDistance = Double.MAX_VALUE;
-            // int availableCount = 0;
-
-            for (RobotTemplate robot : CustomNamespace.robots) {
-                int robotIndex = CustomNamespace.robots.indexOf(robot);
-                // Robot is available if: ENABLED, AND (no target OR target is idle location), AND not carrying product
-                boolean hasNoTarget = robot.getTarget().isEmpty();
-                boolean returningToIdle = robot.getTarget().startsWith("Idle Location");
-                boolean isEnabled = robot.isEnabled(); // CHECK ENABLED STATUS
-                boolean isAvailable = isEnabled && (hasNoTarget || returningToIdle) && !robot.isCarryingProduct();
-
-                if (isAvailable) {
-                    // availableCount++;
-                    JSONObject robotLocation = (JSONObject) idleLocations.get(robotIndex);
-
-                    double distance = calculateDistance(
-                            ((Number) robotLocation.get("X")).doubleValue(),
-                            ((Number) robotLocation.get("Y")).doubleValue(),
-                            ((Number) targetConveyor.get("X")).doubleValue(),
-                            ((Number) targetConveyor.get("Y")).doubleValue()
-                    );
-
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        closestRobot = robot;
-                    }
-                }
-            }
-
-            // Assign target to closest robot if one was found
-            if (closestRobot != null) {
-                // int selectedIndex = CustomNamespace.robots.indexOf(closestRobot);
-                closestRobot.setTarget(target);
-            }
-
+            
+            JSONObject targetConveyor = (JSONObject) inputConveyorLocations.get(conveyorIndex);
+            JSONObject robotLocation = (JSONObject) idleLocations.get(robotIndex);
+            
+            return calculateDistance(
+                ((Number) robotLocation.get("X")).doubleValue(),
+                ((Number) robotLocation.get("Y")).doubleValue(),
+                ((Number) targetConveyor.get("X")).doubleValue(),
+                ((Number) targetConveyor.get("Y")).doubleValue()
+            );
+            
         } catch (Exception e) {
-            e.printStackTrace();
+            System.err.println("Error calculating distance: " + e.getMessage());
+            return Double.MAX_VALUE;
         }
     }
 
@@ -665,14 +762,15 @@ public class RobotAgent extends Agent {
             }
 
         }
-        // When robot has dropped off product and needs to return to idle location
+        // When robot has dropped off product, clear target and wait for new task assignment
         else if (!isCarryingProduct && dropOffConveyorNamesContains(currentLocation)) {
-            // Set target to corresponding idle location
-            String idleLocation = "Idle Location" + (robotIndex == 0 ? "" : " #" + (robotIndex + 1));
-            robot.setTarget(idleLocation);
-            System.out.println("Robot returning to idle location: " + idleLocation);
+            // Clear target so robot becomes available for new tasks
+            if (!currentTarget.isEmpty()) {
+                robot.setTarget("");
+                System.out.println("🔄 [" + getLocalName() + "] Dropoff complete - ready for new tasks");
+            }
         }
-        // When robot has reached its idle location
+        // When robot has reached its idle location (legacy support)
         else if (currentLocation.startsWith("Idle Location")) {
             if (currentTarget.startsWith("Idle Location")) {
                 robot.setTarget("");

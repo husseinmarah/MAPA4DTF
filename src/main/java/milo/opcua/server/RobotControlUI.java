@@ -392,15 +392,15 @@ public class RobotControlUI extends JFrame {
         try {
             for (int i = 0; i < numRobots; i++) {
                 int robotNumber = i + 1;
-                String locationNodeId = robotNumber + "-location";
-                String nextLocationNodeId = robotNumber + "-nextLocation";
-                String stopNodeId = robotNumber + "-stop";
-                String enabledNodeId = robotNumber + "-enabled";
-                String batteryLevelNodeId = robotNumber + "-batteryLevel";
-                String carryingProductNodeId = robotNumber + "-carryingProduct";
-                String carriedProductNodeId = robotNumber + "-carriedProduct";
-                String targetNodeId = robotNumber + "-target";
-                String priorityNodeId = robotNumber + "-priority";
+                String locationNodeId = "LocationRobot" + robotNumber;
+                String nextLocationNodeId = "NextLocationRobot" + robotNumber;
+                String stopNodeId = "StopRobot" + robotNumber;
+                String enabledNodeId = "EnabledRobot" + robotNumber;
+                String batteryLevelNodeId = "BatteryLevelRobot" + robotNumber;
+                String carryingProductNodeId = "CarryingProductRobot" + robotNumber;
+                String carriedProductNodeId = "CarriedProductRobot" + robotNumber;
+                String targetNodeId = "TargetRobot" + robotNumber;
+                String priorityNodeId = "PriorityRobot" + robotNumber;
 
                 String location = readStringValue(locationNodeId);
                 String nextLocation = readStringValue(nextLocationNodeId);
@@ -510,12 +510,12 @@ public class RobotControlUI extends JFrame {
     }
 
     private void setRobotStop(int robotNumber, boolean stop) {
-        String nodeId = robotNumber + "-stop";
+        String nodeId = "StopRobot" + robotNumber;
         writeValue(nodeId, stop);
     }
 
     private void setRobotTarget(int robotNumber, String target) {
-        String nodeId = robotNumber + "-target";
+        String nodeId = "TargetRobot" + robotNumber;
         writeValue(nodeId, target);
     }
 
@@ -523,7 +523,7 @@ public class RobotControlUI extends JFrame {
         String priorityText = priorityTextFields[robotNumber - 1].getText();
         try {
             int priority = Integer.parseInt(priorityText);
-            String nodeId = robotNumber + "-priority";
+            String nodeId = "PriorityRobot" + robotNumber;
             writeValue(nodeId, priority);
         } catch (NumberFormatException e) {
             // Invalid input, ignore

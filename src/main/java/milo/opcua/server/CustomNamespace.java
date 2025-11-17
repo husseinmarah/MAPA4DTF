@@ -232,16 +232,25 @@ public class CustomNamespace extends ManagedNamespace {
 
     private ConveyorAgent createInputConveyorImmediate(UaNodeContext context, int conveyorNumber) {
         // Use SystemConfig for conveyor creation
-        SystemConfig.ConveyorConfig attr = SystemConfig.INPUT_CONVEYORS[0]; // "produced" attribute
-        String nodeId = attr.getNodeId("InputConveyor", conveyorNumber);
-        String displayName = "Input Conveyor " + conveyorNumber + " " + attr.displayName;
+        // Create "produced" node
+        SystemConfig.ConveyorConfig producedAttr = SystemConfig.INPUT_CONVEYORS[0]; // "produced" attribute
+        String producedNodeId = producedAttr.getNodeId("InputConveyor", conveyorNumber);
+        String producedDisplayName = "Input Conveyor " + conveyorNumber + " " + producedAttr.displayName;
         
-        UaVariableNode produced = createSimpleVariableNode(context, nodeId, attr.dataType, displayName);
-        produced.setValue(new DataValue(new Variant(attr.defaultValue)));
-        
+        UaVariableNode produced = createSimpleVariableNode(context, producedNodeId, producedAttr.dataType, producedDisplayName);
+        produced.setValue(new DataValue(new Variant(producedAttr.defaultValue)));
         addNodeToFolderImmediate(context, produced);
         
-        return new ConveyorAgent(produced, conveyorNumber);
+        // Create "enabled" node
+        SystemConfig.ConveyorConfig enabledAttr = SystemConfig.INPUT_CONVEYORS[1]; // "enabled" attribute
+        String enabledNodeId = enabledAttr.getNodeId("InputConveyor", conveyorNumber);
+        String enabledDisplayName = "Input Conveyor " + conveyorNumber + " " + enabledAttr.displayName;
+        
+        UaVariableNode enabled = createSimpleVariableNode(context, enabledNodeId, enabledAttr.dataType, enabledDisplayName);
+        enabled.setValue(new DataValue(new Variant(enabledAttr.defaultValue)));
+        addNodeToFolderImmediate(context, enabled);
+        
+        return new ConveyorAgent(produced, enabled, conveyorNumber);
     }
 
     // =====================================================================
