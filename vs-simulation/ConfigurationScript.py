@@ -66,7 +66,10 @@ raw_components = r'''
                 "default": 80},{
                 "name_template": "cloneCount",
                 "type": "number",
-                "default": 0},],
+                "default": 0},{
+                "name_template": "enabledConveyor",
+                "type": "boolean",
+                "default": false},],
         "property_sets": 2,
         "script": InputConveyor
     },
@@ -114,7 +117,7 @@ raw_components = r'''
                 "name_template": "stop",
                 "type": "boolean",
                 "default": false},              {
-                "name_template": "enabled",
+                "name_template": "enabledRobot",
                 "type": "boolean",
                 "default": true},              {
                 "name_template": "priority",

@@ -22,7 +22,8 @@ def convert_to_camel_case(name):
         "Produced": "produced",
         "Target": "target",
         "Stop": "stop",
-        "Enabled": "enabled",
+        "EnabledRobot": "enabledRobot",
+        "EnabledConveyor": "enabledConveyor",
         "CarryingProduct": "carryingProduct",
         "CarriedProduct": "carriedProduct",
         "BatteryLevel": "batteryLevel",
@@ -80,7 +81,8 @@ def convert_from_camel_case_to_original(name):
         "produced": "Produced",
         "target": "Target",
         "stop": "Stop",
-        "enabled": "Enabled",
+        "enabledRobot": "EnabledRobot",
+        "enabledConveyor": "EnabledConveyor",
         "carryingProduct": "CarryingProduct",
         "carriedProduct": "CarriedProduct",
         "batteryLevel": "BatteryLevel",
@@ -222,7 +224,7 @@ def create_component(app, config):
                     # Configure vehicle properties
                     vehicle.Acceleration = 300.0
                     vehicle.Deceleration = 300.0
-                    vehicle.MaxSpeed = 800.0
+                    vehicle.MaxSpeed = 1000.0
                     vehicle.Interpolation = 0.15
             
             # Create properties with ORIGINAL names for script compatibility
@@ -827,7 +829,7 @@ coordination_lock = False  # Prevents simultaneous path planning
 property_names = [
     'Target',
     'Stop',
-    'Enabled',
+    'EnabledRobot',
     'CarryingProduct',
     'CarriedProduct',
     'BatteryLevel',
@@ -935,12 +937,7 @@ def clone_robots():
     for i in range(1, robot_quantity + 1):
         # Clone the robot without scripts
         robot = comp.clone(0)
-        
-        if i == 1:
-            # First robot named without number
-            robot.Name = 'Mobile Robot Resource'
-        else:
-            robot.Name = 'Mobile Robot Resource #{0}'.format(i)
+        robot.Name = 'Mobile Robot Resource #{0}'.format(i)
         
         robot.Visible = True  # Make clone visible
         cloned_robots.append(robot)
@@ -2543,6 +2540,81 @@ def OnRun():
             'conveyor_destination': None,
             'using_avoidance_offset': False
         }
+
+    # Log robot and conveyor enabled status (wait briefly for OPC-UA to sync)
+    delay(3)  # Wait for OPC-UA enabled status to be set
+    print("\\n" + "="*75)
+    print("  VISUAL SIMULATION - ROBOT & CONVEYOR STATUS")
+    print("="*75)
+    print("Time: " + str(sim.SimTime))
+    print("")
+    
+    # Log Robot Status
+    print("--- ROBOT RESOURCES ---")
+    enabled_robots = 0
+    disabled_robots = 0
+    for robot in robots:
+        robot_index = get_robot_index(robot.Name)
+        robot_enabled = get_robot_property_value('EnabledRobot', robot_index)
+        
+        # Default to True if not set yet (waiting for OPC-UA)
+        if robot_enabled is None:
+            status_text = "WAITING (not synced from OPC-UA yet)"
+            symbol = "[WAIT]"  # or "[-]"
+        elif robot_enabled == True:
+            status_text = "ENABLED"
+            symbol = "[OK]"    # or "[+]"
+            enabled_robots += 1
+        else:
+            status_text = "DISABLED (OPA policy blocked)"
+            symbol = "[STOP]"  # or "[X]"
+            disabled_robots += 1
+                
+        print("  {0} {1} - {2}".format(symbol, robot.Name, status_text))
+    
+    print("  Summary: {0} enabled, {1} disabled".format(enabled_robots, disabled_robots))
+    print("")
+    
+    # Log Conveyor Status (check template properties that sync from OPC-UA)
+    print("--- INPUT CONVEYORS ---")
+    template_conveyor = app.findComponent('_Template_InputConveyor')
+    enabled_conveyors = 0
+    disabled_conveyors = 0
+    waiting_conveyors = 0
+    
+    if template_conveyor:
+        # Check EnabledConveyor1 and EnabledConveyor2 properties from template (synced from OPC-UA)
+        for i in range(1, 3):  # InputConveyor 1 and 2
+            enabled_prop = template_conveyor.getProperty('EnabledConveyor{0}'.format(i))
+            conveyor_name = "InputConveyor #{0}".format(i)
+            
+            if enabled_prop:
+                conveyor_enabled = enabled_prop.Value
+                if conveyor_enabled == True:
+                    status_text = "ENABLED (OPA authorized)"
+                    symbol = "✅"
+                    enabled_conveyors += 1
+                elif conveyor_enabled == False:
+                    status_text = "DISABLED (OPA policy blocked)"
+                    symbol = "🚫"
+                    disabled_conveyors += 1
+                else:
+                    status_text = "WAITING (not synced from OPC-UA yet)"
+                    symbol = "⏳"
+                    waiting_conveyors += 1
+            else:
+                status_text = "WAITING (property not found)"
+                symbol = "⏳"
+                waiting_conveyors += 1
+            
+            print("  {0} {1} - {2}".format(symbol, conveyor_name, status_text))
+        
+        print("  Summary: {0} enabled, {1} disabled, {2} waiting".format(enabled_conveyors, disabled_conveyors, waiting_conveyors))
+    else:
+        print("  Template conveyor not found")
+    print("")
+    print("="*75)
+    print("")
 
     while True:
         for robot in robots:
