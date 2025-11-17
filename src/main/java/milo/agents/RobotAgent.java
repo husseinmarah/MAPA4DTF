@@ -1087,7 +1087,7 @@ public class RobotAgent extends Agent {
                     
                     if (isAvailable) {
                         // Accept the task - set target to the conveyor
-                        String targetName = location.replace(" #", " ");
+                        String targetName = location;
                         myRobot.setTarget(targetName);
                         
                         System.out.println("┌─ TASK ACCEPTED ──────────────────────────────────");

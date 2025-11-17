@@ -343,7 +343,7 @@ public class RobotControlUI extends JFrame {
             gbc.gridx = i % 2;
             gbc.gridy = row + (i / 2);
 
-            inputConveyorProducedCheckboxes[i] = new JCheckBox("Input Conveyor " + conveyorNumber + " Produced");
+            inputConveyorProducedCheckboxes[i] = new JCheckBox("InputConveyor #" + conveyorNumber + " Produced");
 
             // Add action listener for each input conveyor
             int index = i;
