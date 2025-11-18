@@ -790,11 +790,17 @@ import vcMatrix as mat
 import vcVector
 import math
 import heapq
+import os
+import datetime
 
 # Initialize global variables
 comp = getComponent()
 app = getApplication()
 sim = getSimulation()
+
+# CSV file path for statistics export
+csv_file_path = None
+csv_initialized = False
 
 # Helper function to check if a component is a conveyor
 def is_conveyor(component_name):
@@ -837,6 +843,17 @@ property_names = [
     'NextLocation',
     'Priority',
     'MaxSpeed'
+]
+
+# Statistics property names to track for each robot
+statistics_property_names = [
+    'TravelDistance',        # Total distance traveled in mm
+    'PartsTransported',      # Total number of parts transported
+    'CurrentState',          # Current state (Idle, Moving, Transporting, etc.)
+    'IdleTime',             # Total time spent idle (seconds)
+    'MovingTime',           # Total time spent moving (seconds)
+    'TransportingTime',     # Total time spent transporting (seconds)
+    'Utilization'           # Utilization percentage
 ]
 
 def OnStart():
@@ -2483,6 +2500,157 @@ def find_shortest_path_with_reservations(start, goal, pathways, robot_index):
 
     return None
 
+def update_robot_statistics(robot, robot_index, robot_state):
+    """Update statistics tracking for a robot"""
+    try:
+        current_time = sim.SimTime if sim else 0
+        delta_time = current_time - robot_state.get('state_start_time', current_time)
+        
+        # Update total simulation time
+        robot_state['total_simulation_time'] = current_time
+        
+        # Get current position and calculate travel distance
+        current_pos = getRobotPosition(robot)
+        last_pos = robot_state.get('last_position', current_pos)
+        distance_traveled = vector_length(vector_subtract(current_pos, last_pos))
+        
+        # Only count significant movement (ignore micro-movements)
+        if distance_traveled > 10:  # More than 10mm
+            robot_state['travel_distance'] += distance_traveled
+        
+        robot_state['last_position'] = current_pos
+        
+        # Check if robot is carrying a product
+        carrying_product = get_robot_property_value('CarryingProduct', robot_index)
+        is_carrying = carrying_product == True or (
+            isinstance(carrying_product, str) and carrying_product.strip() != ''
+        )
+        
+        # Track parts transported (increment when robot stops carrying)
+        was_carrying = robot_state.get('was_carrying', False)
+        if was_carrying and not is_carrying:
+            robot_state['parts_transported'] += 1
+        robot_state['was_carrying'] = is_carrying
+        
+        # Determine current state
+        is_moving = robot_state.get('moving', False)
+        old_state = robot_state.get('current_state', 'Idle')
+        new_state = 'Idle'
+        
+        if is_moving:
+            if is_carrying:
+                new_state = 'Transporting'
+            else:
+                new_state = 'Moving'
+        else:
+            if is_carrying:
+                new_state = 'Idle'  # At location with product
+            else:
+                new_state = 'Idle'
+        
+        # Accumulate time for the previous state
+        if delta_time > 0:
+            if old_state == 'Idle':
+                robot_state['idle_time'] += delta_time
+            elif old_state == 'Moving':
+                robot_state['moving_time'] += delta_time
+            elif old_state == 'Transporting':
+                robot_state['transporting_time'] += delta_time
+        
+        # Update state
+        robot_state['current_state'] = new_state
+        robot_state['state_start_time'] = current_time
+        
+        # Calculate utilization percentage
+        total_time = robot_state.get('total_simulation_time', 0)
+        if total_time > 0:
+            active_time = robot_state['moving_time'] + robot_state['transporting_time']
+            utilization = (active_time / total_time) * 100
+        else:
+            utilization = 0
+        
+        # Update component properties for dashboard access
+        set_robot_property('TravelDistance', int(robot_state['travel_distance']), robot_index)
+        set_robot_property('PartsTransported', robot_state['parts_transported'], robot_index)
+        set_robot_property('CurrentState', new_state, robot_index)
+        set_robot_property('IdleTime', robot_state['idle_time'], robot_index)
+        set_robot_property('MovingTime', robot_state['moving_time'], robot_index)
+        set_robot_property('TransportingTime', robot_state['transporting_time'], robot_index)
+        set_robot_property('Utilization', utilization, robot_index)
+        
+    except Exception as e:
+        # Silently handle errors to avoid breaking simulation
+        pass
+
+def initialize_csv_file():
+    """Initialize the CSV file with headers"""
+    global csv_file_path, csv_initialized
+    
+    try:
+        # Create timestamp for unique filename
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Save to user's home directory
+        user_home = os.path.expanduser('~')
+        stats_dir = os.path.join(user_home, 'VisualComponents', 'statistics')
+        
+        # Create statistics folder if it doesn't exist
+        if not os.path.exists(stats_dir):
+            os.makedirs(stats_dir)
+        
+        # Create CSV file path
+        csv_file_path = os.path.join(stats_dir, 'robot_statistics_{}.csv'.format(timestamp))
+        
+        # Write header
+        with open(csv_file_path, 'w') as f:
+            f.write('Timestamp,SimTime,RobotName,RobotIndex,CurrentState,TravelDistance_mm,PartsTransported,IdleTime_s,MovingTime_s,TransportingTime_s,Utilization_%\\n')
+        
+        csv_initialized = True
+        print("CSV statistics file initialized: {}".format(csv_file_path))
+        return True
+    except Exception as e:
+        print("Error initializing CSV file: {}".format(str(e)))
+        csv_initialized = False
+        return False
+
+def write_statistics_to_csv(robot_name, robot_index, state):
+    """Write current statistics to CSV file"""
+    global csv_file_path, csv_initialized
+    
+    if not csv_initialized or not csv_file_path:
+        return
+    
+    try:
+        current_time = sim.SimTime if sim else 0
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Calculate utilization
+        total_time = state.get('total_simulation_time', 0)
+        if total_time > 0:
+            active_time = state['moving_time'] + state['transporting_time']
+            utilization = (active_time / total_time) * 100
+        else:
+            utilization = 0
+        
+        # Write data row
+        with open(csv_file_path, 'a') as f:
+            f.write('{},{:.2f},{},{},{},{:.2f},{},{:.2f},{:.2f},{:.2f},{:.2f}\\n'.format(
+                timestamp,
+                current_time,
+                robot_name,
+                robot_index,
+                state['current_state'],
+                state['travel_distance'],
+                state['parts_transported'],
+                state['idle_time'],
+                state['moving_time'],
+                state['transporting_time'],
+                utilization
+            ))
+    except Exception as e:
+        # Silently handle errors to avoid breaking simulation
+        pass
+
 def OnRun():
     global robots, robot_states, comp, app, sim
 
@@ -2525,6 +2693,9 @@ def OnRun():
     
 
 
+    # Initialize CSV file for statistics
+    initialize_csv_file()
+
     # Initialize per-robot states
     robot_states = {}
     for robot in robots:
@@ -2538,7 +2709,18 @@ def OnRun():
             'total_move_time': 0.0,
             'pathways': [],
             'conveyor_destination': None,
-            'using_avoidance_offset': False
+            'using_avoidance_offset': False,
+            # Statistics tracking
+            'travel_distance': 0.0,
+            'parts_transported': 0,
+            'current_state': 'Idle',
+            'idle_time': 0.0,
+            'moving_time': 0.0,
+            'transporting_time': 0.0,
+            'last_position': getRobotPosition(robot),
+            'was_carrying': False,
+            'state_start_time': sim.SimTime if sim else 0,
+            'total_simulation_time': 0.0
         }
 
     # Log robot and conveyor enabled status (wait briefly for OPC-UA to sync)
@@ -2616,7 +2798,51 @@ def OnRun():
     print("="*75)
     print("")
 
+    # Track last statistics log time
+    last_stats_log_time = sim.SimTime if sim else 0
+    stats_log_interval = 30.0  # Log statistics every 30 seconds
+
     while True:
+        # Periodic statistics logging and CSV export
+        current_time = sim.SimTime if sim else 0
+        if current_time - last_stats_log_time >= stats_log_interval:
+            # print("\\n" + "="*75)
+            # print("  ROBOT STATISTICS REPORT")
+            # print("="*75)
+            # print("Time: {:.2f}s".format(current_time))
+            # print("")
+            
+            for robot in robots:
+                robot_index = get_robot_index(robot.Name)
+                state = robot_states[robot_index]
+                
+                # print("--- {} ---".format(robot.Name))
+                # print("  Current State:     {}".format(state['current_state']))
+                # print("  Travel Distance:   {:.2f} mm".format(state['travel_distance']))
+                # print("  Parts Transported: {}".format(state['parts_transported']))
+                # print("  Idle Time:         {:.2f}s".format(state['idle_time']))
+                # print("  Moving Time:       {:.2f}s".format(state['moving_time']))
+                # print("  Transporting Time: {:.2f}s".format(state['transporting_time']))
+                
+                # Calculate utilization
+                total_time = state.get('total_simulation_time', 0)
+                if total_time > 0:
+                    active_time = state['moving_time'] + state['transporting_time']
+                    utilization = (active_time / total_time) * 100
+                    #print("  Utilization:       {:.1f}%".format(utilization))
+                else:
+                    # print("  Utilization:       0.0%")
+                    print("")
+                
+                # Write statistics to CSV file
+                write_statistics_to_csv(robot.Name, robot_index, state)
+            
+            # print("="*75)
+            if csv_initialized and csv_file_path:
+                print("Statistics saved to: {}".format(csv_file_path))
+            print("")
+            last_stats_log_time = current_time
+        
         for robot in robots:
             robot_index = get_robot_index(robot.Name)
             
@@ -2776,7 +3002,9 @@ def OnRun():
                                 # Don't clear location immediately - keep robot "at conveyor" for OPC-UA monitoring
                                 # Location will be cleared when robot gets new target and starts moving
                                 set_robot_property('NextLocation', '', robot_index)
-                
+            
+            # Update statistics for this robot
+            update_robot_statistics(robot, robot_index, robot_states[robot_index])
 
 
         delay(0.1)
@@ -3401,6 +3629,18 @@ def OnReset():
                     prop.Value = ''
                 elif prop.Type == VC_BOOLEAN:
                     prop.Value = False
+        
+        # Reset statistics properties
+        for stat_name in statistics_property_names:
+            unique_prop_name = '{0}{1}'.format(stat_name, i)
+            prop = comp.getProperty(unique_prop_name)
+            if prop:
+                if prop.Type == VC_STRING:
+                    prop.Value = 'Idle'
+                elif prop.Type == VC_BOOLEAN:
+                    prop.Value = False
+                elif prop.Type == VC_INTEGER or prop.Type == VC_REAL:
+                    prop.Value = 0
                 elif prop.Type == VC_INTEGER:
                     if prop_name == 'BatteryLevel':
                         prop.Value = 100
