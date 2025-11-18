@@ -47,6 +47,7 @@ public class SystemConfig {
     // =====================================================================
     public static final ConveyorConfig[] INPUT_CONVEYORS = {
         new ConveyorConfig("produced", "produced", Identifiers.Boolean, false),
+        new ConveyorConfig("enabled", "enabled", Identifiers.Boolean, false),  // Start disabled, OPA will enable if authorized
         new ConveyorConfig("simulationName", "simulationName", Identifiers.String, ""),
         new ConveyorConfig("simulationFolder", "simulationFolder", Identifiers.String, "") 
     };
@@ -78,7 +79,8 @@ public class SystemConfig {
         }
         
         public String getNodeId(int robotNumber) {
-            return robotNumber + "-" + name;
+            // Format: AttributeNameRobot# (e.g., EnabledRobot1, TargetRobot2)
+            return name.substring(0, 1).toUpperCase() + name.substring(1) + "Robot" + robotNumber;
         }
     }
     
@@ -96,7 +98,8 @@ public class SystemConfig {
         }
         
         public String getNodeId(String conveyorType, int conveyorNumber) {
-            return conveyorType + conveyorNumber + name.substring(0, 1).toUpperCase() + name.substring(1) + "-unique-identifier";
+            // Format: AttributeNameConveyorType# (e.g., EnabledInputConveyor1, ProducedInputConveyor2)
+            return name.substring(0, 1).toUpperCase() + name.substring(1) + conveyorType + conveyorNumber;
         }
     }
     
