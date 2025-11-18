@@ -438,6 +438,14 @@ public class ConveyorAgent extends Agent {
         setProduced(true);
     }
     
+    /**
+     * Check if conveyor is enabled by OPA policy
+     * @return true if conveyor is authorized by OPA, false otherwise
+     */
+    public boolean isEnabled() {
+        return enabledConveyor;
+    }
+    
     public void stopProduction() {
         setProduced(false);
     }

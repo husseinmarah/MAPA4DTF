@@ -433,9 +433,14 @@ public class RobotAgent extends Agent {
         synchronized (assignmentLock) {
             for (int i = 0; i < CustomNamespace.getInputConveyors().size(); i++) {
                 ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(i);
+                
+                // CRITICAL: Check if conveyor is enabled by OPA before considering it
+                if (!conveyor.isEnabled()) {
+                    continue; // Skip disabled conveyor
+                }
+                
                 if (conveyor.getProduced()) {
                     String targetName = getConveyorTargetName(i + 1);
-                    String conveyorAgentName = "ConveyorAgent" + (i + 1);
                     
                     // Check if this conveyor already has a robot assigned
                     boolean alreadyAssigned = false;
@@ -451,12 +456,12 @@ public class RobotAgent extends Agent {
                     }
                     
                     // OPA CHECK: Can this robot communicate with the conveyor?
-                    if (securityManager != null && securityManager.canCommunicateWith(getLocalName(), conveyorAgentName)) {
+                    if (securityManager != null && securityManager.canCommunicateWith(getLocalName(), conveyor.getLocalName())) {
                         // Use priority-based task assignment
-                        assignTaskWithPriority(targetName, conveyorAgentName);
+                        assignTaskWithPriority(targetName, conveyor.getLocalName());
                         break; // Only assign one task per cycle
                     } else {
-                        System.out.println("🚫 " + getLocalName() + " ✗ " + conveyorAgentName + " (OPA: Communication blocked - robot not authorized for this conveyor)");
+                        System.out.println("🚫 " + getLocalName() + " ✗ " + conveyor.getLocalName() + " (OPA: Communication blocked - robot not authorized for this conveyor)");
                     }
                 }
             }
@@ -645,6 +650,12 @@ public class RobotAgent extends Agent {
                 ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(i);
                 String conveyorAgentName = "ConveyorAgent" + (i + 1);
                 
+                // CRITICAL: Check if conveyor is enabled by OPA
+                if (!conveyor.isEnabled()) {
+                    System.out.println("🚫 [" + getLocalName() + "] Cannot pickup from " + conveyorAgentName + " - Conveyor disabled by OPA policy");
+                    continue; // Skip disabled conveyor
+                }
+                
                 // OPA CHECK: Verify robot can communicate with this conveyor before pickup
                 if (securityManager != null && !securityManager.canCommunicateWith(getLocalName(), conveyorAgentName)) {
                     System.out.println("🚫 [" + getLocalName() + "] Cannot pickup from " + conveyorAgentName + " - OPA authorization denied");
@@ -824,6 +835,9 @@ public class RobotAgent extends Agent {
     
     /**
      * Handles incoming federation messages from other agents
+     * NOTE: Product notifications with protocol "product-ready-notification" are caught by 
+     * ProductNotificationHandler FIRST, so they won't normally reach this handler.
+     * This handler serves as backup and handles all other federation message types.
      */
     private class FederationMessageHandler extends CyclicBehaviour {
         
@@ -836,6 +850,8 @@ public class RobotAgent extends Agent {
             }
             
             // Handle federation-specific messages
+            // ProductNotificationHandler processes product notifications first,
+            // so this mainly handles: PeerCoordination, ProductionCommand, StatusRequest, etc.
             if (isFederationMessage(msg)) {
                 handleFederationMessage(msg);
             } else {
@@ -846,26 +862,81 @@ public class RobotAgent extends Agent {
         
         private boolean isFederationMessage(ACLMessage msg) {
             String content = msg.getContent();
+            String protocol = msg.getProtocol();
             return content != null && (
                 content.contains("Federation") ||
                 content.contains("FFA") ||
                 content.contains("Coordination") ||
-                msg.getProtocol() != null && msg.getProtocol().equals("federation-coordination")
+                content.contains("ProductReady") ||
+                protocol != null && (protocol.equals("federation-coordination") || protocol.equals("product-ready-notification"))
             );
         }
         
         private void handleFederationMessage(ACLMessage msg) {
             String content = msg.getContent();
             String senderName = msg.getSender().getLocalName();
+            String protocol = msg.getProtocol();
             
             System.out.println("[" + getLocalName() + "] Received federation message from " + senderName + ": " + content);
             
-            if (content.contains("PeerCoordination")) {
+            // PRIORITY 1: Handle product notifications (horizontal federation with conveyors)
+            // Check protocol first for more precise matching
+            if ("product-ready-notification".equals(protocol) || content.contains("ProductReady")) {
+                handleProductReadyNotification(msg);
+            } 
+            // PRIORITY 2: Handle peer coordination (horizontal federation with other robots)
+            else if (content.contains("PeerCoordination")) {
                 handlePeerCoordinationMessage(msg);
-            } else if (content.contains("ProductionCommand")) {
+            } 
+            // PRIORITY 3: Handle production commands (vertical federation with management)
+            else if (content.contains("ProductionCommand")) {
                 handleProductionCommandMessage(msg);
-            } else if (content.contains("StatusRequest")) {
+            } 
+            // PRIORITY 4: Handle status requests (both horizontal and vertical federation)
+            else if (content.contains("StatusRequest")) {
                 handleStatusRequestMessage(msg);
+            }
+            // DEFAULT: Generic federation message (for future extensions)
+            else {
+                System.out.println("[" + getLocalName() + "] Received generic federation message - no specific handler");
+            }
+        }
+        
+        private void handleProductReadyNotification(ACLMessage msg) {
+            // Handle product ready notification from conveyor
+            String content = msg.getContent();
+            String senderName = msg.getSender().getLocalName();
+            
+            System.out.println("┌─ PRODUCT NOTIFICATION RECEIVED ──────────────────");
+            System.out.println("│  📩 RECEIVED");
+            System.out.println("│  Time:     " + java.time.Instant.now());
+            System.out.println("│  Robot:    " + getLocalName());
+            System.out.println("│  From:     " + senderName);
+            System.out.println("│  Message:  " + content);
+            System.out.println("└──────────────────────────────────────────────────");
+            
+            // Check if robot is available and enabled to respond
+            if (myRobot == null || !myRobot.isEnabled()) {
+                System.out.println("🚫 [" + getLocalName() + "] Cannot respond - Robot disabled");
+                return;
+            }
+            
+            boolean hasNoTarget = myRobot.getTarget().isEmpty();
+            boolean returningToIdle = myRobot.getTarget().startsWith("Idle Location");
+            boolean isAvailable = (hasNoTarget || returningToIdle) && !myRobot.isCarryingProduct();
+            
+            if (!isAvailable) {
+                System.out.println("⏭️ [" + getLocalName() + "] Cannot respond - Robot busy (Target: " + myRobot.getTarget() + ", Carrying: " + myRobot.isCarryingProduct() + ")");
+                return;
+            }
+            
+            // Extract conveyor information from message
+            String conveyorLocation = extractValue(content, ":location");
+            
+            if (conveyorLocation != null && !conveyorLocation.isEmpty()) {
+                // Check if this robot should take the task (priority-based)
+                System.out.println("✅ [" + getLocalName() + "] Responding to notification - Assigning target: " + conveyorLocation);
+                assignTaskWithPriority(conveyorLocation, senderName);
             }
         }
         
@@ -1031,10 +1102,14 @@ public class RobotAgent extends Agent {
     /**
      * Product Notification Handler - Horizontal Federation with ConveyorAgents
      * Receives push notifications when conveyors have products ready for pickup
+     * NOTE: This handler uses a specific MessageTemplate filter to catch product notifications
+     * BEFORE they reach the generic FederationMessageHandler, preventing duplicate processing
      */
     private class ProductNotificationHandler extends CyclicBehaviour {
         @Override
         public void action() {
+            // Specific template: catches INFORM messages with product-ready-notification protocol
+            // This ensures these messages are NOT processed by FederationMessageHandler
             jade.lang.acl.MessageTemplate mt = jade.lang.acl.MessageTemplate.and(
                 jade.lang.acl.MessageTemplate.MatchPerformative(jade.lang.acl.ACLMessage.INFORM),
                 jade.lang.acl.MessageTemplate.MatchProtocol("product-ready-notification")
