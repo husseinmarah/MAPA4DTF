@@ -135,6 +135,14 @@ public class ProductionAgentManager extends Agent {
         addBehaviour(new HeartbeatMonitor(this, 10000));
         addBehaviour(new ProductionCoordinationBehaviour(this, 3000)); // 3 seconds for very fast task distribution
         
+        // Add delayed behavior to log OPA authorization summary after agents have authenticated
+        addBehaviour(new jade.core.behaviours.WakerBehaviour(this, 8000) {
+            @Override
+            protected void onWake() {
+                logOPAAuthorizationSummary();
+            }
+        });
+        
         System.out.println("✅ " + getLocalName() + " ready (Production coordination active)");
     }
     
@@ -184,6 +192,77 @@ public class ProductionAgentManager extends Agent {
             
         } catch (FIPAException e) {
             System.err.println("[" + getLocalName() + "] DF registration failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Log OPA authorization summary showing which agents are enabled/disabled
+     */
+    private void logOPAAuthorizationSummary() {
+        try {
+            System.out.println("\n╔═════════════════════════════════════════════════════════════════════════╗");
+            System.out.println("║           OPA POLICY AUTHORIZATION SUMMARY                              ║");
+            System.out.println("╚═════════════════════════════════════════════════════════════════════════╝");
+            System.out.println("Time: " + java.time.Instant.now());
+            System.out.println();
+            
+            // Check robot agents
+            System.out.println("┌─ ROBOT AGENTS ───────────────────────────────────────────┐");
+            int enabledRobots = 0;
+            int disabledRobots = 0;
+            
+            for (int i = 1; i <= milo.opcua.server.SystemConfig.NUM_ROBOTS; i++) {
+                String agentName = "RobotAgent" + i;
+                boolean canAccess = securityManager.canAccessService(agentName, "robot_operation");
+                
+                if (canAccess) {
+                    System.out.println("│  ✅ " + agentName + " - ENABLED (OPA: robot_operation allowed)");
+                    enabledRobots++;
+                } else {
+                    System.out.println("│  🚫 " + agentName + " - DISABLED (OPA: robot_operation denied)");
+                    disabledRobots++;
+                }
+            }
+            System.out.println("│  Summary: " + enabledRobots + " enabled, " + disabledRobots + " disabled");
+            System.out.println("└──────────────────────────────────────────────────────────┘");
+            System.out.println();
+            
+            // Check conveyor agents
+            System.out.println("┌─ CONVEYOR AGENTS ────────────────────────────────────────┐");
+            int enabledConveyors = 0;
+            int disabledConveyors = 0;
+            
+            for (int i = 1; i <= milo.opcua.server.SystemConfig.NUM_INPUT_CONVEYORS; i++) {
+                String agentName = "ConveyorAgent" + i;
+                boolean canAccess = securityManager.canAccessService(agentName, "conveyor_access");
+                
+                if (canAccess) {
+                    System.out.println("│  ✅ " + agentName + " - ENABLED (OPA: conveyor_access allowed)");
+                    enabledConveyors++;
+                } else {
+                    System.out.println("│  🚫 " + agentName + " - DISABLED (OPA: conveyor_access denied)");
+                    disabledConveyors++;
+                }
+            }
+            System.out.println("│  Summary: " + enabledConveyors + " enabled, " + disabledConveyors + " disabled");
+            System.out.println("└──────────────────────────────────────────────────────────┘");
+            System.out.println();
+            
+            // Overall summary
+            int totalAgents = enabledRobots + disabledRobots + enabledConveyors + disabledConveyors;
+            int totalEnabled = enabledRobots + enabledConveyors;
+            int totalDisabled = disabledRobots + disabledConveyors;
+            
+            System.out.println("╔═════════════════════════════════════════════════════════════════════════╗");
+            System.out.println("║  TOTAL: " + totalEnabled + "/" + totalAgents + " agents ENABLED by OPA policy");
+            if (totalDisabled > 0) {
+                System.out.println("║  ⚠️  " + totalDisabled + " agent(s) DISABLED by OPA policy");
+            }
+            System.out.println("╚═════════════════════════════════════════════════════════════════════════╝");
+            System.out.println();
+            
+        } catch (Exception e) {
+            System.err.println("Error logging OPA authorization summary: " + e.getMessage());
         }
     }
 
