@@ -2733,26 +2733,36 @@ def OnRun():
     
     # Log Robot Status
     print("--- ROBOT RESOURCES ---")
+    template_robot = app.findComponent('_Template_Mobile_Robot_Resource')
     enabled_robots = 0
     disabled_robots = 0
-    for robot in robots:
-        robot_index = get_robot_index(robot.Name)
-        robot_enabled = get_robot_property_value('EnabledRobot', robot_index)
+    # for robot in robots:
+    #     robot_index = get_robot_index(robot.Name)
+    #     robot_enabled = get_robot_property_value('EnabledRobot', robot_index)
         
-        # Default to True if not set yet (waiting for OPC-UA)
-        if robot_enabled is True or robot_enabled is None:
-            status_text = "ENABLED (Authorized by OPA policy)"
-            symbol = "✅"  # or "✔️"
-        elif robot_enabled == False:
-            status_text = "DISABLED (Blocked by OPA policy)"
-            symbol = "❎"  # or "❌"
-            disabled_robots += 1
-        else:
-            status_text = "WAITING (Not synced from OPC-UA yet)"
-            symbol = "🕐"  # or "[-]"
-            waiting_robots += 1
+    if template_robot:
+        # Check EnabledRobot properties from template (synced from OPC-UA)
+        for i in range(1, len(robots) + 1):  # Robots
+            enabled_prop = template_robot.getProperty('EnabledRobot{0}'.format(i))
+            robot_name = "Robot #{0}".format(i)
+        
+            # Default to True if not set yet (waiting for OPC-UA)
+            if enabled_prop:
+                robot_enabled = enabled_prop.Value
+                if robot_enabled == True:
+                    status_text = "ENABLED (Authorized by OPA policy)"
+                    symbol = "✅"  # or "✔️"
+                    enabled_robots += 1
+                elif robot_enabled == False:
+                    status_text = "DISABLED (Blocked by OPA policy)"
+                    symbol = "❎"  # or "❌"
+                    disabled_robots += 1
+                else:
+                    status_text = "WAITING (Not synced from OPC-UA yet)"
+                    symbol = "🕐"  # or "[-]"
+                    waiting_robots += 1
                 
-        print("  {0} {1} - {2}".format(symbol, robot.Name, status_text))
+            print("  {0} {1} - {2}".format(symbol, robot_name, status_text))
     
     print("  Summary: {0} enabled, {1} disabled".format(enabled_robots, disabled_robots))
     print("")
