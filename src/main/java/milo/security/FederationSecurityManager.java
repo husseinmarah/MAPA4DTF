@@ -331,10 +331,13 @@ public class FederationSecurityManager {
                 KeycloakClient.UserAttributes sourceAttrs = sourceToken.userAttributes;
                 KeycloakClient.UserAttributes targetAttrs = targetToken.userAttributes;
                 
+                // Determine the correct action based on agent types
+                String action = determineActionType(sourceAgent, targetAgent);
+                
                 // Evaluate peer communication policy with OPA
                 OPAClient.PolicyDecision decision = opaClient.evaluateCommunicationPolicy(
                     sourceAgent, sourceAttrs.org, sourceAttrs.role, sourceAttrs.trustScore, sourceAttrs.status,
-                    targetAgent, targetAttrs.org, targetAttrs.role, targetAttrs.trustScore, targetAttrs.status, "peer_coordination"
+                    targetAgent, targetAttrs.org, targetAttrs.role, targetAttrs.trustScore, targetAttrs.status, action
                 );
                 
                 // Print detailed OPA policy evaluation box
@@ -343,7 +346,7 @@ public class FederationSecurityManager {
                 System.out.println("│  Time:        " + java.time.Instant.now());
                 System.out.println("│  From:        " + sourceAgent + " (" + sourceAttrs.org + ")");
                 System.out.println("│  To:          " + targetAgent + " (" + targetAttrs.org + ")");
-                System.out.println("│  Action:      peer_coordination");
+                System.out.println("│  Action:      " + action);
                 System.out.println("│  Role:        " + sourceAttrs.role);
                 System.out.println("│  Trust Score: " + sourceAttrs.trustScore);
                 System.out.println("│  Reason:      " + decision.reason);
@@ -383,6 +386,25 @@ public class FederationSecurityManager {
      */
     public SecurityContext getAgentContext(String agentName) {
         return agentContexts.get(agentName);
+    }
+    
+    /**
+     * Determine the OPA action type based on agent types
+     * RobotAgent → ConveyorAgent = "conveyor_access"
+     * ConveyorAgent → RobotAgent = "peer_coordination"
+     * Other combinations = "peer_coordination"
+     */
+    private String determineActionType(String sourceAgent, String targetAgent) {
+        // Robot accessing conveyor (checking production status, pickup)
+        if (sourceAgent.startsWith("RobotAgent") && targetAgent.startsWith("ConveyorAgent")) {
+            return "conveyor_access";
+        }
+        // Conveyor notifying robot (push notifications)
+        if (sourceAgent.startsWith("ConveyorAgent") && targetAgent.startsWith("RobotAgent")) {
+            return "peer_coordination";
+        }
+        // Default: peer coordination (robot-to-robot, etc.)
+        return "peer_coordination";
     }
     
     /**
