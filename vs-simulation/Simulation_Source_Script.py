@@ -2559,15 +2559,15 @@ def OnRun():
         
         # Default to True if not set yet (waiting for OPC-UA)
         if robot_enabled is None:
-            status_text = "WAITING (not synced from OPC-UA yet)"
-            symbol = "[WAIT]"  # or "[-]"
+            status_text = "WAITING (Not synced from OPC-UA yet)"
+            symbol = "🕐"  # or "[-]"
         elif robot_enabled == True:
-            status_text = "ENABLED"
-            symbol = "[OK]"    # or "[+]"
+            status_text = "ENABLED (Authorized by OPA policy)"
+            symbol = "✅"  # or "✔️"
             enabled_robots += 1
         else:
-            status_text = "DISABLED (OPA policy blocked)"
-            symbol = "[STOP]"  # or "[X]"
+            status_text = "DISABLED (Blocked by OPA policy)"
+            symbol = "❎"  # or "❌"
             disabled_robots += 1
                 
         print("  {0} {1} - {2}".format(symbol, robot.Name, status_text))
@@ -2587,24 +2587,24 @@ def OnRun():
         for i in range(1, 3):  # InputConveyor 1 and 2
             enabled_prop = template_conveyor.getProperty('EnabledConveyor{0}'.format(i))
             conveyor_name = "InputConveyor #{0}".format(i)
-            
+            # -*- coding: utf-8 -*-
             if enabled_prop:
                 conveyor_enabled = enabled_prop.Value
                 if conveyor_enabled == True:
-                    status_text = "ENABLED (OPA authorized)"
-                    symbol = "✅"
+                    status_text = "ENABLED (Authorized by OPA policy)"
+                    symbol = "✅"  # or "✔️"
                     enabled_conveyors += 1
                 elif conveyor_enabled == False:
-                    status_text = "DISABLED (OPA policy blocked)"
-                    symbol = "🚫"
+                    status_text = "DISABLED (Blocked by OPA policy)"
+                    symbol = "❎"  # or "❌"
                     disabled_conveyors += 1
                 else:
-                    status_text = "WAITING (not synced from OPC-UA yet)"
-                    symbol = "⏳"
+                    status_text = "WAITING (Not synced from OPC-UA yet)"
+                    symbol = "🕐"  # or "[-]"
                     waiting_conveyors += 1
             else:
                 status_text = "WAITING (property not found)"
-                symbol = "⏳"
+                symbol = "🕐"  # or "[-]"
                 waiting_conveyors += 1
             
             print("  {0} {1} - {2}".format(symbol, conveyor_name, status_text))
@@ -2643,8 +2643,6 @@ def OnRun():
 
                 if not goal_pathway_name:
                     continue
-                
-
 
                 if goal_pathway_name in conveyor_components:
                     conveyor = conveyors[goal_pathway_name]
