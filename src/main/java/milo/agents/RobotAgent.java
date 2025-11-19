@@ -642,19 +642,19 @@ public class RobotAgent extends Agent {
     
     /**
      * Notify conveyor that robot has exited the conveyor area
+     * Uses ACLMessage for cross-container communication
      */
     private void notifyConveyorExit(String conveyorAgentName) {
         try {
-            // Find the conveyor agent and call its notifyRobotExit method
-            for (ConveyorAgent conveyor : CustomNamespace.getInputConveyors()) {
-                if (conveyor.getLocalName().equals(conveyorAgentName)) {
-//                    conveyor.notifyRobotExit(getLocalName());
-                    System.out.println("📤 " + getLocalName() + " - Notified " + conveyorAgentName + " of exit");
-                    return;
-                }
-            }
-
-            System.out.println("⚠️ " + getLocalName() + " - Could not find conveyor " + conveyorAgentName + " to notify exit");
+            // Create exit notification message
+            ACLMessage exitMsg = new ACLMessage(ACLMessage.INFORM);
+            exitMsg.addReceiver(new AID(conveyorAgentName, AID.ISLOCALNAME));
+            exitMsg.setProtocol("robot-exit");
+            exitMsg.setContent("(RobotExit :robot \"" + getLocalName() + "\" :time \"" + java.time.Instant.now() + "\")");
+            
+            send(exitMsg);
+            
+            System.out.println("📤 " + getLocalName() + " - Sent exit notification to " + conveyorAgentName);
 
         } catch (Exception e) {
             System.err.println("❌ " + getLocalName() + " - Error notifying conveyor exit: " + e.getMessage());
