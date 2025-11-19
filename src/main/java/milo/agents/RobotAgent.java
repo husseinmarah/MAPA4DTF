@@ -2,7 +2,6 @@ package milo.agents;
 
 import jade.core.Agent;
 import jade.core.AID;
-import jade.core.behaviours.ParallelBehaviour;
 import jade.core.behaviours.TickerBehaviour;
 import jade.core.behaviours.CyclicBehaviour;
 import jade.lang.acl.ACLMessage;
@@ -147,14 +146,14 @@ public class RobotAgent extends Agent {
             }
         });
         
-        // Start main behaviors
-        ParallelBehaviour parallelBehaviour = new ParallelBehaviour();
-        parallelBehaviour.addSubBehaviour(robotBehavior);
-        parallelBehaviour.addSubBehaviour(new ProductionCommandHandler()); // Handle production commands
-        parallelBehaviour.addSubBehaviour(new HeartbeatBehaviour(this, 10000)); // Send heartbeat every 10 seconds
-        parallelBehaviour.addSubBehaviour(new PeerCoordinationBehaviour(this, 3000)); // Peer coordination every 3 seconds
-        parallelBehaviour.addSubBehaviour(new ProductNotificationHandler()); // Handle product notifications from conveyors
-        addBehaviour(parallelBehaviour);
+        // Start main behaviors - ADD INDEPENDENTLY for true concurrent execution
+        // DO NOT use ParallelBehaviour - it causes blocking issues where one behavior blocks others
+        addBehaviour(robotBehavior);
+        addBehaviour(new ProductionCommandHandler()); // Handle production commands
+        addBehaviour(new HeartbeatBehaviour(this, 10000)); // Send heartbeat every 10 seconds
+        addBehaviour(new PeerCoordinationBehaviour(this, 3000)); // Peer coordination every 3 seconds
+        addBehaviour(new ProductNotificationHandler()); // Handle CFP from conveyors
+        addBehaviour(new TaskResponseHandler()); // Handle ACCEPT/REJECT from conveyors
         
         // Register with ProductionAgentManager
         registerWithProductionManager();
@@ -1249,30 +1248,18 @@ public class RobotAgent extends Agent {
                 lastHeartbeat = now;
             }
             
-            // Create template to catch CFP with specific protocol
-            // MessageTemplate mt = MessageTemplate.(
-            //     MessageTemplate.MatchPerformative(ACLMessage.INFORM)           );
-
-            // DEBUG: Check CFP messages
-            ACLMessage cfp_Message = myAgent.receive();
-            if (cfp_Message != null) {
-                System.out.println("🔍 " + getLocalName() + " - ProductNotificationHandler caught message:");
-                System.out.println("   Performative: " + ACLMessage.getPerformative(cfp_Message.getPerformative()));
-                System.out.println("   Protocol:     " + cfp_Message.getProtocol());
-                System.out.println("   Sender:       " + cfp_Message.getSender().getLocalName());
-                System.out.println("   Content:      " + (cfp_Message.getContent() != null ? cfp_Message.getContent().substring(0, Math.min(100, cfp_Message.getContent().length())) : "null"));
-                
-                // Check if this is a CFP with our protocol
-                if (cfp_Message.getPerformative() == ACLMessage.CFP && "pickup-task-cfp".equals(cfp_Message.getProtocol())) {
-                    messageCount++;
-                    System.out.println("✅ " + getLocalName() + " - THIS IS OUR CFP MESSAGE!");
-                    handleProductNotification(cfp_Message);
-                } else {
-                    System.out.println("⚠️ " + getLocalName() + " - NOT OUR MESSAGE, putting back");
-                    // Put back if not our message
-                    putBack(cfp_Message);
-                    block();
-                }
+            // Use proper template to ONLY receive CFP messages with pickup-task-cfp protocol
+            // This prevents catching messages meant for other behaviors
+            MessageTemplate mt = MessageTemplate.and(
+                MessageTemplate.MatchPerformative(ACLMessage.CFP),
+                MessageTemplate.MatchProtocol("pickup-task-cfp")
+            );
+            
+            ACLMessage cfpMsg = receive(mt);
+            if (cfpMsg != null) {
+                messageCount++;
+                System.out.println("✅ " + getLocalName() + " - Received CFP message from " + cfpMsg.getSender().getLocalName());
+                handleProductNotification(cfpMsg);
             } else {
                 block();
             }
