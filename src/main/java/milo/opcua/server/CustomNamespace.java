@@ -54,7 +54,7 @@ public class CustomNamespace extends ManagedNamespace {
 
     // Legacy references for backward compatibility
     static UaVariableNode pathwayProperties;
-    static UaVariableNode idleProperties;
+    public static UaVariableNode idleProperties;
     static UaVariableNode inputconveyorProperties;
     public static UaVariableNode outputconveyorProperties;
 
