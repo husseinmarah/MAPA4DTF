@@ -11,7 +11,7 @@ import milo.agents.ConveyorAgent;
 import milo.agents.FederationAgentManager;
 import milo.agents.ProductionAgentManager;
 import milo.agents.RobotAgent;
-import org.bouncycastle.asn1.cms.Time;
+import jade.tools.ToolAgent.*;
 
 /**
  * Dynamic Container - Creates agents based on SystemConfig values
@@ -27,6 +27,10 @@ public class Container {
 
             Profile profile = new ProfileImpl(properties);
             AgentContainer agentContainer = runtime.createMainContainer(profile);
+            
+            // Start Sniffer Agent for monitoring
+            AgentController snifferAgent = agentContainer.createNewAgent("sniffer", "jade.tools.sniffer.Sniffer", new Object[0]);
+            snifferAgent.start();
 
             // Start Federation Address Manager first
             AgentController famAgent = agentContainer.createNewAgent("FederationAgentManager",
