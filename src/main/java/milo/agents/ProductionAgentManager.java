@@ -821,10 +821,20 @@ public class ProductionAgentManager extends Agent {
             try {
                 System.out.println("[" + myAgent.getLocalName() + "] 🏭 Coordinating production activities...");
                 
-                // NEW: Check and assign tasks to idle robots
-                assignTasksToIdleRobots();
+                // DISABLED: assignTasksToIdleRobots() - Conflicts with Contract Net Protocol (CNP)
+                // 
+                // CNP HANDLES TASK DISTRIBUTION AUTOMATICALLY:
+                // - ConveyorAgents broadcast CFP when products are ready
+                // - RobotAgents respond with proposals based on availability, priority, distance
+                // - ConveyorAgents evaluate proposals and select winner
+                // - Only the winner moves to the conveyor
+                // 
+                // ProductionManager should NOT assign pickup tasks directly - it breaks CNP!
+                // Instead, ProductionManager only monitors system health and efficiency.
+                //
+                // assignTasksToIdleRobots(); // COMMENTED OUT
                 
-                // Production coordination logic
+                // Production coordination logic (monitoring only, no task assignment)
                 optimizeTaskAllocation();
                 balanceWorkload();
                 monitorProductionEfficiency();
