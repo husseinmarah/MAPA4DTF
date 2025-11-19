@@ -46,6 +46,13 @@ public class RobotAgent extends Agent {
     
     // Priority-based collision resolution
     private static final boolean USE_PRIORITY_RESOLUTION = true; // Enable priority-based task assignment
+    
+    // Contract Net Protocol State Tracking
+    private java.util.Set<String> activeProposals = new java.util.HashSet<>(); // Track conversation IDs of sent proposals
+    
+    // Location tracking for conveyor exit notification
+    private String previousLocation = ""; // Track previous location to detect when robot leaves conveyor area
+    private String lastPickupConveyor = null; // Track which conveyor the robot picked up from
 
     // =====================================================================
     // FEDERATION SUPPORT
@@ -66,6 +73,22 @@ public class RobotAgent extends Agent {
         return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
     }
 
+    /**
+     * DEBUGGING WRAPPER: Logs ALL target changes with full stack trace
+     * Use this instead of myRobot.setTarget() to track where targets are being set
+     */
+    private void setRobotTarget(String newTarget, String source) {
+        if (myRobot == null) return;
+
+        String oldTarget = myRobot.getTarget();
+        System.out.println("🎯🎯🎯 [SET TARGET] " + getLocalName() + " - TARGET CHANGE");
+        System.out.println("   Old Target: '" + oldTarget + "'");
+        System.out.println("   New Target: '" + newTarget + "'");
+        System.out.println("   Source:     " + source);
+        System.out.println("   Thread:     " + Thread.currentThread().getName());
+        myRobot.setTarget(newTarget);
+    }
+
     // =====================================================================
     // AGENT LIFECYCLE
     // =====================================================================
@@ -77,6 +100,10 @@ public class RobotAgent extends Agent {
             // Get reference to this specific robot (index is robotId - 1)
             if (robotId > 0 && robotId <= CustomNamespace.robots.size()) {
                 myRobot = CustomNamespace.robots.get(robotId - 1);
+                System.out.println("🤖 [ROBOT INIT] " + getLocalName() + " mapped to RobotTemplate index " + (robotId - 1) + " (robotId=" + robotId + ")");
+                System.out.println("   Current Target: '" + myRobot.getTarget() + "'");
+            } else {
+                System.err.println("❌ [ROBOT INIT ERROR] " + getLocalName() + " - Invalid robotId " + robotId + " (robots.size=" + CustomNamespace.robots.size() + ")");
             }
         }
         
@@ -204,7 +231,10 @@ public class RobotAgent extends Agent {
                 
                 // Add federation-specific behaviors
                 addBehaviour(new FederationMaintenanceBehaviour());
-                addBehaviour(new FederationMessageHandler());
+                // DISABLED: FederationMessageHandler conflicts with Contract Net Protocol
+                // It uses receive() without template, catching ALL messages including CFP
+                // This causes CFP messages to be discarded instead of processed by ProductNotificationHandler
+                // addBehaviour(new FederationMessageHandler());
                 
                 // Initialize horizontal federation with other robots
                 initializeHorizontalFederation();
@@ -412,10 +442,13 @@ public class RobotAgent extends Agent {
                 return; // Robot is disabled by OPA policy
             }
             
+            // Track location changes to detect when robot exits conveyor area
+            trackLocationChanges();
+            
             // Handle product pickup for this specific robot
             checkProductPickup(myRobot);
 
-            // Handle product dropoff for this specific robot
+            // Handle product drop-off for this specific robot
             checkProductDropoff(myRobot);
 
             // Check for new targets for this specific robot
@@ -429,57 +462,25 @@ public class RobotAgent extends Agent {
 
 
     private void checkConveyorProduction() {
-        // CRITICAL: Only check conveyors if robot is enabled
-        if (myRobot == null || !myRobot.isEnabled()) {
-            return; // Robot disabled - cannot accept conveyor tasks
-        }
+        // =====================================================================
+        // DISABLED: This method is no longer used since we switched to Contract Net Protocol (CNP)
+        // 
+        // OLD BEHAVIOR (Direct Polling):
+        //   - Robots actively poll conveyors for available products
+        //   - Robots directly assign themselves using assignTaskWithPriority()
+        // 
+        // NEW BEHAVIOR (Contract Net Protocol):
+        //   - Conveyors broadcast CFP (Call-For-Proposals) when product is ready
+        //   - Robots respond with PROPOSE messages containing priority & distance
+        //   - Conveyor evaluates all proposals and sends ACCEPT_PROPOSAL to winner
+        //   - Winner sets target ONLY after receiving ACCEPT_PROPOSAL
+        //   - Losers receive REJECT_PROPOSAL and remain idle
+        // 
+        // This prevents the bug where rejected robots were still moving to conveyors
+        // =====================================================================
         
-        // Only check if robot is available (idle or returning to idle, not carrying product)
-        boolean hasNoTarget = myRobot.getTarget().isEmpty();
-        boolean returningToIdle = myRobot.getTarget().startsWith("Idle Location");
-        boolean isAvailable = (hasNoTarget || returningToIdle) && !myRobot.isCarryingProduct();
-        
-        if (!isAvailable) {
-            return; // Robot is busy
-        }
-        
-        // Check both input conveyors for product availability using fair distribution
-        synchronized (assignmentLock) {
-            for (int i = 0; i < CustomNamespace.getInputConveyors().size(); i++) {
-                ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(i);
-                
-                // CRITICAL: Check if conveyor is enabled by OPA before considering it
-                if (!conveyor.isEnabled()) {
-                    continue; // Skip disabled conveyor
-                }
-                
-                if (conveyor.getProduced()) {
-                    String targetName = getConveyorTargetName(i + 1);
-                    
-                    // Check if this conveyor already has a robot assigned
-                    boolean alreadyAssigned = false;
-                    for (RobotTemplate robot : CustomNamespace.robots) {
-                        if (robot.getTarget().equals(targetName) && !robot.isCarryingProduct()) {
-                            alreadyAssigned = true;
-                            break;
-                        }
-                    }
-                    
-                    if (alreadyAssigned) {
-                        continue; // Skip this conveyor, already assigned
-                    }
-                    
-                    // OPA CHECK: Can this robot communicate with the conveyor?
-                    if (securityManager != null && securityManager.canCommunicateWith(getLocalName(), conveyor.getLocalName())) {
-                        // Use priority-based task assignment
-                        assignTaskWithPriority(targetName, conveyor.getLocalName());
-                        break; // Only assign one task per cycle
-                    } else {
-                        System.out.println("🚫 " + getLocalName() + " ✗ " + conveyor.getLocalName() + " (OPA: Communication blocked - robot not authorized for this conveyor)");
-                    }
-                }
-            }
-        }
+        // Do nothing - robots now wait for CFP messages from ProductNotificationHandler
+        return;
     }
 
     private String getConveyorTargetName(int conveyorNumber) {
@@ -490,6 +491,241 @@ public class RobotAgent extends Agent {
 
     private boolean isInputConveyorTarget(String target) {
         return target.equals("InputConveyor") || target.startsWith("InputConveyor #");
+    }
+    
+    /**
+     * Assign idle location target to robot after completing drop-off
+     * This sends the robot back to its designated idle station
+     */
+    private void assignIdleLocation(RobotTemplate robot) {
+        try {
+            // Parse idle locations from JSON
+            String idlePropertiesString = CustomNamespace.idleProperties.getValue().getValue().getValue().toString();
+            JSONParser parser = new JSONParser();
+            JSONArray idleLocationsArray = (JSONArray) parser.parse(idlePropertiesString);
+            
+            // Get this robot's idle location (robotId maps to index in array)
+            int robotIndex = robotId - 1;
+            if (robotIndex >= 0 && robotIndex < idleLocationsArray.size()) {
+                JSONObject idleLocation = (JSONObject) idleLocationsArray.get(robotIndex);
+                String idleLocationName = (String) idleLocation.get("Name");
+                
+                System.out.println("┌─ RETURN TO IDLE ─────────────────────────────────");
+                System.out.println("│  🏠 RETURNING TO IDLE");
+                System.out.println("│  Time:     " + java.time.Instant.now());
+                System.out.println("│  Robot:    " + getLocalName());
+                System.out.println("│  Target:   " + idleLocationName);
+                System.out.println("│  Status:   Moving to idle station");
+                System.out.println("└──────────────────────────────────────────────────");
+                
+                setRobotTarget(idleLocationName, "assignIdleLocation() - After dropoff");
+            } else {
+                System.err.println("❌ " + getLocalName() + " - Invalid robot index for idle location: " + robotIndex);
+            }
+        } catch (Exception e) {
+            System.err.println("❌ " + getLocalName() + " - Error assigning idle location: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Assign drop-off target to robot after picking up product
+     * This ensures robot immediately knows where to go after pickup
+     */
+    private void assignDropOffTarget(RobotTemplate robot) {
+        try {
+            // Get the JSON string from output_conveyor_Properties
+            String outputConveyorPropertiesString = CustomNamespace.outputconveyorProperties.getValue().getValue().getValue().toString();
+            // Parse the JSON string into a JSONArray
+            JSONParser parser = new JSONParser();
+            JSONArray outputConveyorsArray = (JSONArray) parser.parse(outputConveyorPropertiesString);
+            // Extract Names into a List
+            List<String> dropOffConveyors = new ArrayList<>();
+            for (Object o : outputConveyorsArray) {
+                JSONObject conveyor = (JSONObject) o;
+                String name = (String) conveyor.get("Name");
+                dropOffConveyors.add(name);
+            }
+            // Randomly select one conveyor name
+            if (!dropOffConveyors.isEmpty()) {
+                Random rand = new Random();
+                String dropOffTarget = dropOffConveyors.get(rand.nextInt(dropOffConveyors.size()));
+                
+                // Log before setting target
+                String currentLocation = robot.getLocation();
+                String currentNextLocation = robot.getNextLocation();
+                String currentTarget = robot.getTarget();
+                
+                System.out.println("┌─ DROP-OFF TARGET ASSIGNMENT ─────────────────────");
+                System.out.println("│  🎯 SETTING NEW TARGET");
+                System.out.println("│  Time:         " + java.time.Instant.now());
+                System.out.println("│  Robot:        " + getLocalName());
+                System.out.println("│  Current Loc:  " + currentLocation);
+                System.out.println("│  Old Target:   '" + currentTarget + "'");
+                System.out.println("│  Old NextLoc:  '" + currentNextLocation + "'");
+                System.out.println("│  NEW Target:   '" + dropOffTarget + "'");
+                System.out.println("│  CarryingProd: " + robot.isCarryingProduct());
+                
+                // Set the new target using wrapper for tracking
+                setRobotTarget(dropOffTarget, "assignDropOffTarget() - After pickup");
+                
+                // Small delay to allow OPC-UA to process
+                Thread.sleep(200);
+                
+                // Verify target was actually written to OPC-UA
+                String verifiedTarget = robot.getTarget();
+                String verifiedNextLocation = robot.getNextLocation();
+                String verifiedLocation = robot.getLocation();
+                
+                boolean targetSetCorrectly = dropOffTarget.equals(verifiedTarget);
+                
+                System.out.println("│");
+                System.out.println("│  ✓ Verified Target:   '" + verifiedTarget + "'");
+                System.out.println("│  ✓ Verified NextLoc:  '" + verifiedNextLocation + "'");
+                System.out.println("│  ✓ Verified Location: '" + verifiedLocation + "'");
+                System.out.println("│  ✓ Target Set OK:     " + targetSetCorrectly);
+                System.out.println("│");
+                System.out.println("│  Type:         Drop-off location (OutputConveyor)");
+                System.out.println("│  Status:       " + (targetSetCorrectly ? "✅ Target written to OPC-UA" : "❌ TARGET NOT SET!"));
+                System.out.println("└──────────────────────────────────────────────────");
+                
+                if (!targetSetCorrectly) {
+                    System.err.println("❌❌❌ CRITICAL ERROR: Target was not set correctly!");
+                    System.err.println("   Expected: '" + dropOffTarget + "'");
+                    System.err.println("   Got:      '" + verifiedTarget + "'");
+                    // Try setting it again
+                    System.out.println("🔄 Retrying target assignment...");
+                    setRobotTarget(dropOffTarget, "assignDropOffTarget() - RETRY");
+                }
+            } else {
+                System.out.println("⚠️ " + getLocalName() + " - No drop-off conveyors available");
+            }
+        } catch (Exception e) {
+            System.err.println("❌ " + getLocalName() + " - Error assigning drop-off target: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Track location changes to detect when robot exits conveyor area
+     * Notifies the conveyor so it can send new CFP broadcasts without collision risk
+     */
+    private void trackLocationChanges() {
+        if (myRobot == null) return;
+        
+        String currentLocation = myRobot.getLocation();
+        
+        // Check if location has changed
+        if (!currentLocation.equals(previousLocation)) {
+            // Check if robot was at a conveyor and has now left
+            boolean wasAtConveyor = isInputConveyorLocation(previousLocation);
+            boolean isAtConveyor = isInputConveyorLocation(currentLocation);
+            
+            if (wasAtConveyor && !isAtConveyor && lastPickupConveyor != null) {
+                // Robot has left the conveyor area - notify the conveyor
+                notifyConveyorExit(lastPickupConveyor);
+                lastPickupConveyor = null; // Clear tracking
+            }
+            
+            // Update previous location
+            previousLocation = currentLocation;
+        }
+    }
+    
+    /**
+     * Check if location is an InputConveyor location
+     */
+    private boolean isInputConveyorLocation(String location) {
+        if (location == null || location.isEmpty()) return false;
+        return location.startsWith("InputConveyor #") || location.equals("InputConveyor");
+    }
+    
+    /**
+     * Notify conveyor that robot has exited the conveyor area
+     */
+    private void notifyConveyorExit(String conveyorAgentName) {
+        try {
+            // Find the conveyor agent and call its notifyRobotExit method
+            for (ConveyorAgent conveyor : CustomNamespace.getInputConveyors()) {
+                if (conveyor.getLocalName().equals(conveyorAgentName)) {
+//                    conveyor.notifyRobotExit(getLocalName());
+                    System.out.println("📤 " + getLocalName() + " - Notified " + conveyorAgentName + " of exit");
+                    return;
+                }
+            }
+
+            System.out.println("⚠️ " + getLocalName() + " - Could not find conveyor " + conveyorAgentName + " to notify exit");
+
+        } catch (Exception e) {
+            System.err.println("❌ " + getLocalName() + " - Error notifying conveyor exit: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Notify all conveyors that robot has reached drop-off and task is complete
+     * This allows conveyors to send new CFP broadcasts if they have products waiting
+     * The notification includes information about available idle robots
+     */
+    private void notifyConveyorsRobotAvailable() {
+        try {
+            // Count how many robots are currently idle and available
+            int idleRobotsCount = 0;
+            StringBuilder idleRobotsList = new StringBuilder();
+            
+            for (RobotTemplate robot : CustomNamespace.robots) {
+                boolean hasNoTarget = robot.getTarget().isEmpty();
+                boolean returningToIdle = robot.getTarget().startsWith("Idle Location");
+                boolean isAvailable = robot.isEnabled() && (hasNoTarget || returningToIdle) && !robot.isCarryingProduct();
+                
+                if (isAvailable) {
+                    idleRobotsCount++;
+                    int robotIndex = CustomNamespace.robots.indexOf(robot);
+                    if (idleRobotsList.length() > 0) idleRobotsList.append(",");
+                    idleRobotsList.append("RobotAgent").append(robotIndex + 1);
+                }
+            }
+            
+            // Find all conveyor agents through Directory Facilitator
+            DFAgentDescription template = new DFAgentDescription();
+            ServiceDescription sd = new ServiceDescription();
+            sd.setType("ConveyorService");
+            template.addServices(sd);
+            
+            DFAgentDescription[] results = DFService.search(this, template);
+            
+            System.out.println("┌─ TASK COMPLETE NOTIFICATION ─────────────────────");
+            System.out.println("│  🔔 NOTIFYING CONVEYORS");
+            System.out.println("│  Time:          " + java.time.Instant.now());
+            System.out.println("│  Robot:         " + getLocalName());
+            System.out.println("│  Status:        Task complete at drop-off location");
+            System.out.println("│  Idle Robots:   " + idleRobotsCount + " available");
+            System.out.println("│  Available:     [" + idleRobotsList.toString() + "]");
+            System.out.println("│  Conveyor Targets: " + results.length);
+            
+            for (DFAgentDescription result : results) {
+                ACLMessage notification = new ACLMessage(ACLMessage.INFORM);
+                notification.addReceiver(result.getName());
+                notification.setProtocol("task-complete");
+                notification.setContent(
+                    "(TaskComplete " +
+                    ":completed-by \"" + getLocalName() + "\" " +
+                    ":status \"at-dropoff\" " +
+                    ":idle-robots " + idleRobotsCount + " " +
+                    ":available-robots \"" + idleRobotsList.toString() + "\")"
+                );
+                
+                send(notification);
+                System.out.println("│  ✓ Sent to: " + result.getName().getLocalName());
+            }
+            
+            System.out.println("│  Message:       Conveyors can send CFP for new products");
+            System.out.println("└──────────────────────────────────────────────────");
+            
+        } catch (FIPAException e) {
+            System.err.println("❌ " + getLocalName() + " - Error notifying conveyors: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -654,22 +890,28 @@ public class RobotAgent extends Agent {
             return;
         }
         
-        String location = robot.getLocation();
-        // boolean isCarryingProduct = robot.isCarryingProduct();
+        boolean isCarryingProduct = robot.isCarryingProduct();
+        String robotLocation = robot.getLocation();
+        String robotTarget = robot.getTarget();
+        String robotNextLocation = robot.getNextLocation();
+        
+        System.out.println("┌─ PICKUP CHECK ───────────────────────────────────");
+        System.out.println("│  Robot:        " + getLocalName());
+        System.out.println("│  Location:     '" + robotLocation + "' (length: " + robotLocation.length() + ")");
+        System.out.println("│  Target:       '" + robotTarget + "'");
+        System.out.println("│  NextLocation: '" + robotNextLocation + "'");
+        System.out.println("│  Carrying:     " + isCarryingProduct);
+        System.out.println("└──────────────────────────────────────────────────");
 
         // Check for pickup at both input conveyors
         for (int i = 0; i < CustomNamespace.getInputConveyors().size(); i++) {
             String conveyorTargetName = getConveyorTargetName(i + 1);
-            if (location.equals(conveyorTargetName)) {
+            
+            if (robotLocation.equals(conveyorTargetName)) {
+                System.out.println("  🔍 Comparing: '" + robotLocation + "' == '" + conveyorTargetName + "' ? " + robotLocation.equals(conveyorTargetName));
                 ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(i);
                 String conveyorAgentName = "ConveyorAgent" + (i + 1);
-                
-                // CRITICAL: Check if conveyor is enabled by OPA
-                if (!conveyor.isEnabled()) {
-                    System.out.println("🚫 [" + getLocalName() + "] Cannot pickup from " + conveyorAgentName + " - Conveyor disabled by OPA policy");
-                    continue; // Skip disabled conveyor
-                }
-                
+
                 // OPA CHECK: Verify robot can communicate with this conveyor before pickup
                 if (securityManager != null && !securityManager.canCommunicateWith(getLocalName(), conveyorAgentName)) {
                     System.out.println("🚫 [" + getLocalName() + "] Cannot pickup from " + conveyorAgentName + " - OPA authorization denied");
@@ -686,6 +928,8 @@ public class RobotAgent extends Agent {
                 boolean canPickup = conveyor.canPickup(getLocalName());
                 System.out.println("🔍 " + getLocalName() + " - Checking pickup permission at " + conveyorAgentName + ": " + canPickup + " (Produced: " + conveyor.getProduced() + ")");
                 
+                System.out.println(conveyorAgentName + " Status - Produced: " + conveyor.getProduced() + ", Pickup Queue: ");
+
                 if (conveyor.getProduced() && canPickup) {
                     System.out.println("┌─ PRODUCT PICKUP ─────────────────────────────────");
                     System.out.println("│  📦 PICKUP");
@@ -701,8 +945,14 @@ public class RobotAgent extends Agent {
                     robot.setCarryingProduct(true);
                     conveyor.setProduced(false);
                     
+                    // Track which conveyor this robot picked up from
+                    lastPickupConveyor = conveyorAgentName;
+                    
                     // Notify conveyor that pickup is complete
                     conveyor.notifyPickupComplete(getLocalName());
+                    
+                    // IMMEDIATELY assign drop-off target after picking up product
+                    assignDropOffTarget(robot);
                     
                     break; // Exit loop once we find a match
                 }
@@ -711,9 +961,9 @@ public class RobotAgent extends Agent {
     }
 
     private void checkProductDropoff(RobotTemplate robot) {
-        // CRITICAL: Check if robot is enabled before allowing dropoff
+        // CRITICAL: Check if robot is enabled before allowing drop-off
         if (!robot.isEnabled()) {
-            System.out.println("🚫 [" + getLocalName() + "] Cannot dropoff - Robot disabled by OPA policy");
+            System.out.println("🚫 [" + getLocalName() + "] Cannot drop-off - Robot disabled by OPA policy");
             return;
         }
         
@@ -736,6 +986,12 @@ public class RobotAgent extends Agent {
             // Report task completion to ProductionAgentManager for load balancing
             reportTaskCompletionToManager();
             robot.setCarryingProduct(false);
+            
+            // Notify all conveyors that robot is available and returning to idle
+            notifyConveyorsRobotAvailable();
+            
+            // Send robot back to idle location
+            assignIdleLocation(robot);
         }
     }
 
@@ -765,58 +1021,23 @@ public class RobotAgent extends Agent {
         boolean isCarryingProduct = robot.isCarryingProduct();
         String currentTarget = robot.getTarget();
         String currentLocation = robot.getLocation();
-        int robotIndex = CustomNamespace.robots.indexOf(robot);
 
-        // When robot is carrying a product and needs a drop-off location
-        if (isCarryingProduct && (isInputConveyorTarget(currentTarget) || currentTarget.isEmpty())) {
-
-            try {
-                // Get the JSON string from output_conveyor_Properties
-                String outputConveyorPropertiesString = CustomNamespace.outputconveyorProperties.getValue().getValue().getValue().toString();
-                // Parse the JSON string into a JSONArray
-                JSONParser parser = new JSONParser();
-                JSONArray outputConveyorsArray = (JSONArray) parser.parse(outputConveyorPropertiesString);
-                // Extract Names into a List
-                List<String> dropOffConveyors = new ArrayList<>();
-                for (Object o : outputConveyorsArray) {
-                    JSONObject conveyor = (JSONObject) o;
-                    String name = (String) conveyor.get("Name");
-                    dropOffConveyors.add(name);
-                }
-                // Randomly select one conveyor name
-                if (!dropOffConveyors.isEmpty()) {
-                    Random rand = new Random();
-                    String dropOffTarget = dropOffConveyors.get(rand.nextInt(dropOffConveyors.size()));
-                    robot.setTarget(dropOffTarget);
-                    System.out.println("┌─ TARGET ASSIGNMENT ──────────────────────────────");
-                    System.out.println("│  🎯 NEW TARGET");
-                    System.out.println("│  Time:   " + java.time.Instant.now());
-                    System.out.println("│  Robot:  " + getLocalName());
-                    System.out.println("│  Target: " + dropOffTarget);
-                    System.out.println("│  Type:   Drop-off location");
-                    System.out.println("└──────────────────────────────────────────────────");
-                } else {
-                    System.out.println("⚠️ " + getLocalName() + " - No drop-off conveyors available");
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-
+        // Fallback: If robot is carrying a product but has no target (edge case)
+        // This shouldn't happen as assignDropOffTarget is called immediately after pickup
+        if (isCarryingProduct && currentTarget.isEmpty()) {
+            System.out.println("⚠️ " + getLocalName() + " - Carrying product but no target (fallback assignment)");
+            assignDropOffTarget(robot);
         }
-        // When robot has dropped off product, clear target and wait for new task assignment
-        else if (!isCarryingProduct && dropOffConveyorNamesContains(currentLocation)) {
-            // Clear target so robot becomes available for new tasks
-            if (!currentTarget.isEmpty()) {
-                robot.setTarget("");
-                System.out.println("🔄 [" + getLocalName() + "] Dropoff complete - ready for new tasks");
-            }
-        }
-        // When robot has reached its idle location (legacy support)
-        else if (currentLocation.startsWith("Idle Location")) {
+        // When robot has reached its idle location
+        if (currentLocation.startsWith("Idle Location")) {
             if (currentTarget.startsWith("Idle Location")) {
+                // Clear target so robot becomes available for new tasks
                 robot.setTarget("");
-                System.out.println("Robot reached idle location. Ready for new tasks.");
-                checkConveyorProduction();
+                System.out.println("┌─ IDLE LOCATION REACHED ──────────────────────────");
+                System.out.println("│  Robot:    " + getLocalName());
+                System.out.println("│  Location: " + currentLocation);
+                System.out.println("│  Status:   Ready for new tasks");
+                System.out.println("└──────────────────────────────────────────────────");
             }
         }
     }
@@ -1034,12 +1255,12 @@ public class RobotAgent extends Agent {
             }
             
             // STEP 2: Find ProductionAgentManager through Directory Facilitator
-            jade.domain.FIPAAgentManagement.DFAgentDescription template = new jade.domain.FIPAAgentManagement.DFAgentDescription();
-            jade.domain.FIPAAgentManagement.ServiceDescription sdSearch = new jade.domain.FIPAAgentManagement.ServiceDescription();
+            DFAgentDescription template = new DFAgentDescription();
+            ServiceDescription sdSearch = new ServiceDescription();
             sdSearch.setType("ManufacturingCoordination");
             template.addServices(sdSearch);
             
-            jade.domain.FIPAAgentManagement.DFAgentDescription[] results = jade.domain.DFService.search(this, template);
+            DFAgentDescription[] results = DFService.search(this, template);
             
             if (results.length > 0) {
                 jade.core.AID productionManager = results[0].getName();
@@ -1173,6 +1394,23 @@ public class RobotAgent extends Agent {
          */
         private void handleTaskAcceptance(ACLMessage accept) {
             try {
+                String conversationId = accept.getConversationId();
+                
+                // ATOMIC VALIDATION: Check and remove in synchronized block to prevent duplicate processing
+                synchronized (activeProposals) {
+                    if (conversationId == null || !activeProposals.contains(conversationId)) {
+                        System.out.println("⚠️ [VALIDATION FAILED] " + getLocalName() + " - Received ACCEPT for unknown conversationId: '" + conversationId + "'");
+                        System.out.println("   Active proposals: " + activeProposals);
+                        System.out.println("   Reason: " + (conversationId == null ? "NULL conversationId" : "Already processed or never sent"));
+                        return; // Ignore - already processed or not our CFP
+                    }
+                    
+                    // Remove immediately to prevent duplicate processing
+                    activeProposals.remove(conversationId);
+                }
+                
+                System.out.println("✅ [VALIDATION PASSED] " + getLocalName() + " - Valid ACCEPT for conversationId: '" + conversationId + "' (remaining: " + activeProposals.size() + ")");
+                
                 String senderName = accept.getSender().getLocalName();
                 String content = accept.getContent();
                 String location = extractValue(content, ":location");
@@ -1187,8 +1425,7 @@ public class RobotAgent extends Agent {
                 
                 // Assign target to robot
                 if (myRobot != null && location != null) {
-                    myRobot.setTarget(location);
-                    
+                    setRobotTarget(location, "TaskResponseHandler.handleTaskAcceptance() - ACCEPT_PROPOSAL received");
                     System.out.println("📍 " + getLocalName() + " - Target set to: " + myRobot.getTarget());
                     
                     // Pre-register in the conveyor's pickup queue as the winner
@@ -1220,11 +1457,48 @@ public class RobotAgent extends Agent {
         
         /**
          * Handle task rejection - another robot won the bid
+         * CRITICAL: Clear any tentative target to prevent robot from moving to conveyor
          */
         private void handleTaskRejection(ACLMessage reject) {
             try {
+                String conversationId = reject.getConversationId();
+                
+                // ATOMIC VALIDATION: Check and remove in synchronized block to prevent duplicate processing
+                synchronized (activeProposals) {
+                    if (conversationId == null || !activeProposals.contains(conversationId)) {
+                        System.out.println("⚠️ [VALIDATION FAILED] " + getLocalName() + " - Received REJECT for unknown conversationId: '" + conversationId + "'");
+                        System.out.println("   Active proposals: " + activeProposals);
+                        System.out.println("   Reason: " + (conversationId == null ? "NULL conversationId" : "Already processed or never sent"));
+                        return; // Ignore - already processed or not our CFP
+                    }
+                    
+                    // Remove immediately to prevent duplicate processing
+                    activeProposals.remove(conversationId);
+                }
+                
+                System.out.println("✅ [VALIDATION PASSED] " + getLocalName() + " - Valid REJECT for conversationId: '" + conversationId + "' (remaining: " + activeProposals.size() + ")");
+                
                 String senderName = reject.getSender().getLocalName();
-                System.out.println("⏭️ " + getLocalName() + " - Proposal rejected by " + senderName + " (Another robot was selected)");
+                
+                System.out.println("┌─ TASK REJECTED (BID LOST) ───────────────────────");
+                System.out.println("│  ❌ PROPOSAL REJECTED");
+                System.out.println("│  Time:       " + java.time.Instant.now());
+                System.out.println("│  Robot:      " + getLocalName());
+                System.out.println("│  Conveyor:   " + senderName);
+                System.out.println("│  Reason:     Another robot was selected");
+                System.out.println("└──────────────────────────────────────────────────");
+                
+                // DEFENSIVE: Explicitly ensure target is cleared/idle
+                // This should not be necessary if everything is working correctly,
+                // but acts as a safety net in case of race conditions or state leakage
+                if (myRobot != null) {
+                    String currentTarget = myRobot.getTarget();
+                    if (currentTarget != null && !currentTarget.isEmpty() && !currentTarget.startsWith("Idle")) {
+                        System.out.println("⚠️ [DEFENSIVE CLEAR] " + getLocalName() + " - Clearing unexpected target: '" + currentTarget + "'");
+                        setRobotTarget("Idle", "TaskResponseHandler.handleTaskRejection() - DEFENSIVE CLEAR");
+                    }
+                }
+                
             } catch (Exception e) {
                 System.err.println("❌ " + getLocalName() + " - Error handling task rejection: " + e.getMessage());
             }
@@ -1346,6 +1620,13 @@ public class RobotAgent extends Agent {
                 System.out.println("   Reply-to ConvID:     '" + (msg.getInReplyTo() != null ? msg.getInReplyTo() : "null") + "'");
                 
                 send(proposal);
+                
+                // Track this proposal's conversation ID
+                String conversationId = msg.getConversationId();
+                if (conversationId != null) {
+                    activeProposals.add(conversationId);
+                    System.out.println("📝 [PROPOSAL TRACKING] " + getLocalName() + " - Tracking conversationId: '" + conversationId + "' (active: " + activeProposals.size() + ")");
+                }
                 
                 System.out.println("┌─ PROPOSAL SUBMITTED ─────────────────────────────");
                 System.out.println("│  📤 PROPOSAL SENT");
@@ -1550,12 +1831,12 @@ public class RobotAgent extends Agent {
     private void sendHeartbeat() {
         try {
             // Find ProductionAgentManager
-            jade.domain.FIPAAgentManagement.DFAgentDescription template = new jade.domain.FIPAAgentManagement.DFAgentDescription();
-            jade.domain.FIPAAgentManagement.ServiceDescription sd = new jade.domain.FIPAAgentManagement.ServiceDescription();
+            DFAgentDescription template = new DFAgentDescription();
+            ServiceDescription sd = new ServiceDescription();
             sd.setType("ManufacturingCoordination");
             template.addServices(sd);
             
-            jade.domain.FIPAAgentManagement.DFAgentDescription[] results = jade.domain.DFService.search(this, template);
+            DFAgentDescription[] results = DFService.search(this, template);
             
             if (results.length > 0) {
                 AID productionManager = results[0].getName();
@@ -1874,7 +2155,7 @@ public class RobotAgent extends Agent {
                     
                     if (requestedTarget != null && !requestedTarget.isEmpty()) {
                         // Accept the task
-                        myRobot.setTarget(requestedTarget);
+                        setRobotTarget(requestedTarget, "PeerCoordinationBehaviour.handlePeerTaskRequest() - Peer request accepted");
                         
                         // Send acceptance reply
                         ACLMessage reply = msg.createReply();
