@@ -6,6 +6,7 @@ import jade.core.behaviours.ParallelBehaviour;
 import jade.core.behaviours.TickerBehaviour;
 import jade.core.behaviours.CyclicBehaviour;
 import jade.lang.acl.ACLMessage;
+import jade.lang.acl.MessageTemplate;
 import jade.domain.DFService;
 import jade.domain.FIPAAgentManagement.DFAgentDescription;
 import jade.domain.FIPAAgentManagement.ServiceDescription;
@@ -157,6 +158,20 @@ public class RobotAgent extends Agent {
         
         // Register with ProductionAgentManager
         registerWithProductionManager();
+    }
+
+    
+    @Override
+    protected void takeDown() {
+        // Deregister from the Directory Facilitator
+        try {
+            DFService.deregister(this);
+            System.out.println("[" + getLocalName() + "] Deregistered from Directory Facilitator");
+        } catch (FIPAException fe) {
+            System.err.println("[" + getLocalName() + "] Error deregistering from DF: " + fe.getMessage());
+        }
+        
+        System.out.println("[" + getLocalName() + "] Agent terminating...");
     }
     
     /**
@@ -662,18 +677,34 @@ public class RobotAgent extends Agent {
                     continue; // Skip this conveyor
                 }
                 
-                if (conveyor.getProduced()) {
+                // FEDERATION COORDINATION: Register in pickup queue if not already registered
+                if (!robot.isCarryingProduct() && conveyor.getProduced()) {
+                    conveyor.registerForPickup(getLocalName(), robot.getPriority());
+                    System.out.println("📝 " + getLocalName() + " - Registered in pickup queue at " + conveyorAgentName);
+                }
+                
+                // FEDERATION COORDINATION: Check if this robot can pick up (is it next in queue?)
+                boolean canPickup = conveyor.canPickup(getLocalName());
+                System.out.println("🔍 " + getLocalName() + " - Checking pickup permission at " + conveyorAgentName + ": " + canPickup + " (Produced: " + conveyor.getProduced() + ")");
+                
+                if (conveyor.getProduced() && canPickup) {
                     System.out.println("┌─ PRODUCT PICKUP ─────────────────────────────────");
                     System.out.println("│  📦 PICKUP");
                     System.out.println("│  Time:     " + java.time.Instant.now());
-                    System.out.println("│  Robot:    " + getLocalName() + " (Enabled: " + robot.isEnabled() + ")");
+                    System.out.println("│  Robot:    " + getLocalName() + " (Enabled: " + robot.isEnabled() + ", Priority: " + robot.getPriority() + ")");
                     System.out.println("│  Location: " + conveyorTargetName);
                     System.out.println("│  Conveyor: " + conveyorAgentName);
                     System.out.println("│  Auth:     OPA authorization verified");
+                    System.out.println("│  Queue:    Pickup authorized (priority-based ordering)");
                     System.out.println("│  Action:   Produced status → false");
                     System.out.println("└──────────────────────────────────────────────────");
+                    
                     robot.setCarryingProduct(true);
                     conveyor.setProduced(false);
+                    
+                    // Notify conveyor that pickup is complete
+                    conveyor.notifyPickupComplete(getLocalName());
+                    
                     break; // Exit loop once we find a match
                 }
             }
@@ -986,13 +1017,28 @@ public class RobotAgent extends Agent {
      */
     private void registerWithProductionManager() {
         try {
-            System.out.println("[" + getLocalName() + "] Registering with ProductionAgentManager...");
+            System.out.println("[" + getLocalName() + "] Registering with Directory Facilitator and ProductionAgentManager...");
             
-            // Find ProductionAgentManager through Directory Facilitator
+            // STEP 1: Register this robot with Directory Facilitator so ConveyorAgents can find it
+            DFAgentDescription dfd = new DFAgentDescription();
+            dfd.setName(getAID());
+            ServiceDescription sd = new ServiceDescription();
+            sd.setType("MaterialHandling");
+            sd.setName(getLocalName() + "-robot-service");
+            dfd.addServices(sd);
+            
+            try {
+                DFService.register(this, dfd);
+                System.out.println("✅ [" + getLocalName() + "] Registered with Directory Facilitator (Type: MaterialHandling)");
+            } catch (FIPAException fe) {
+                System.err.println("❌ [" + getLocalName() + "] DF registration failed: " + fe.getMessage());
+            }
+            
+            // STEP 2: Find ProductionAgentManager through Directory Facilitator
             jade.domain.FIPAAgentManagement.DFAgentDescription template = new jade.domain.FIPAAgentManagement.DFAgentDescription();
-            jade.domain.FIPAAgentManagement.ServiceDescription sd = new jade.domain.FIPAAgentManagement.ServiceDescription();
-            sd.setType("ManufacturingCoordination");
-            template.addServices(sd);
+            jade.domain.FIPAAgentManagement.ServiceDescription sdSearch = new jade.domain.FIPAAgentManagement.ServiceDescription();
+            sdSearch.setType("ManufacturingCoordination");
+            template.addServices(sdSearch);
             
             jade.domain.FIPAAgentManagement.DFAgentDescription[] results = jade.domain.DFService.search(this, template);
             
@@ -1028,9 +1074,9 @@ public class RobotAgent extends Agent {
     private class ProductionCommandHandler extends CyclicBehaviour {
         @Override
         public void action() {
-            jade.lang.acl.MessageTemplate mt = jade.lang.acl.MessageTemplate.and(
-                jade.lang.acl.MessageTemplate.MatchPerformative(ACLMessage.REQUEST),
-                jade.lang.acl.MessageTemplate.MatchProtocol("production-command")
+            MessageTemplate mt = MessageTemplate.and(
+                MessageTemplate.MatchPerformative(ACLMessage.REQUEST),
+                MessageTemplate.MatchProtocol("production-command")
             );
             
             ACLMessage msg = receive(mt);
@@ -1100,31 +1146,141 @@ public class RobotAgent extends Agent {
     }
     
     /**
-     * Product Notification Handler - Horizontal Federation with ConveyorAgents
-     * Receives push notifications when conveyors have products ready for pickup
-     * NOTE: This handler uses a specific MessageTemplate filter to catch product notifications
-     * BEFORE they reach the generic FederationMessageHandler, preventing duplicate processing
+     * Task Response Handler - Handles ACCEPT_PROPOSAL and REJECT_PROPOSAL from ConveyorAgents
+     * This behavior listens for responses after robot has submitted a proposal
      */
-    private class ProductNotificationHandler extends CyclicBehaviour {
+    private class TaskResponseHandler extends CyclicBehaviour {
         @Override
         public void action() {
-            // Specific template: catches INFORM messages with product-ready-notification protocol
-            // This ensures these messages are NOT processed by FederationMessageHandler
-            jade.lang.acl.MessageTemplate mt = jade.lang.acl.MessageTemplate.and(
-                jade.lang.acl.MessageTemplate.MatchPerformative(jade.lang.acl.ACLMessage.INFORM),
-                jade.lang.acl.MessageTemplate.MatchProtocol("product-ready-notification")
-            );
+            // Create template to catch both ACCEPT_PROPOSAL and REJECT_PROPOSAL
+            MessageTemplate mtAccept = MessageTemplate.MatchPerformative(ACLMessage.ACCEPT_PROPOSAL);
+            MessageTemplate mtReject = MessageTemplate.MatchPerformative(ACLMessage.REJECT_PROPOSAL);
+            MessageTemplate mt = MessageTemplate.or(mtAccept, mtReject);
             
-            jade.lang.acl.ACLMessage msg = receive(mt);
+            ACLMessage msg = receive(mt);
             if (msg != null) {
-                handleProductNotification(msg);
+                if (msg.getPerformative() == ACLMessage.ACCEPT_PROPOSAL) {
+                    handleTaskAcceptance(msg);
+                } else if (msg.getPerformative() == ACLMessage.REJECT_PROPOSAL) {
+                    handleTaskRejection(msg);
+                }
             } else {
                 block();
             }
         }
         
-        private void handleProductNotification(jade.lang.acl.ACLMessage msg) {
+        /**
+         * Handle task acceptance - this robot won the bid
+         */
+        private void handleTaskAcceptance(ACLMessage accept) {
             try {
+                String senderName = accept.getSender().getLocalName();
+                String content = accept.getContent();
+                String location = extractValue(content, ":location");
+                
+                System.out.println("┌─ TASK ACCEPTED (BID WON) ────────────────────────");
+                System.out.println("│  ✅ TASK ASSIGNED");
+                System.out.println("│  Time:       " + java.time.Instant.now());
+                System.out.println("│  Robot:      " + getLocalName());
+                System.out.println("│  Conveyor:   " + senderName);
+                System.out.println("│  Location:   " + location);
+                System.out.println("└──────────────────────────────────────────────────");
+                
+                // Assign target to robot
+                if (myRobot != null && location != null) {
+                    myRobot.setTarget(location);
+                    
+                    System.out.println("📍 " + getLocalName() + " - Target set to: " + myRobot.getTarget());
+                    
+                    // Pre-register in the conveyor's pickup queue as the winner
+                    try {
+                        for (int i = 0; i < CustomNamespace.getInputConveyors().size(); i++) {
+                            ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(i);
+                            if (("ConveyorAgent" + (i + 1)).equals(senderName)) {
+                                conveyor.reserveForWinner(getLocalName(), myRobot.getPriority());
+                                System.out.println("✅ " + getLocalName() + " - Reserved pickup slot at " + senderName);
+                                break;
+                            }
+                        }
+                    } catch (Exception e) {
+                        System.err.println("⚠️ " + getLocalName() + " - Could not reserve pickup slot: " + e.getMessage());
+                    }
+                    
+                    // Send confirmation
+                    ACLMessage confirm = accept.createReply();
+                    confirm.setPerformative(ACLMessage.INFORM);
+                    confirm.setContent("(TaskConfirmed :robot \"" + getLocalName() + "\" :status \"EnRoute\")");
+                    send(confirm);
+                }
+                
+            } catch (Exception e) {
+                System.err.println("❌ " + getLocalName() + " - Error handling task acceptance: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+        
+        /**
+         * Handle task rejection - another robot won the bid
+         */
+        private void handleTaskRejection(ACLMessage reject) {
+            try {
+                String senderName = reject.getSender().getLocalName();
+                System.out.println("⏭️ " + getLocalName() + " - Proposal rejected by " + senderName + " (Another robot was selected)");
+            } catch (Exception e) {
+                System.err.println("❌ " + getLocalName() + " - Error handling task rejection: " + e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Product Notification Handler - Handles CFP (Call-For-Proposals) from ConveyorAgents
+     * Receives CFP when conveyors have products ready for pickup and submits proposals
+     */
+    private class ProductNotificationHandler extends CyclicBehaviour {
+        private long lastHeartbeat = 0;
+        private int messageCount = 0;
+        
+        @Override
+        public void action() {
+            // Periodic heartbeat to confirm behavior is running
+            long now = System.currentTimeMillis();
+            if (now - lastHeartbeat > 10000) {
+                System.out.println("💓 " + getLocalName() + " - ProductNotificationHandler ACTIVE (processed " + messageCount + " CFPs, waiting for CFP messages...)");
+                lastHeartbeat = now;
+            }
+            
+            // Create template to catch CFP with specific protocol
+            // MessageTemplate mt = MessageTemplate.(
+            //     MessageTemplate.MatchPerformative(ACLMessage.INFORM)           );
+
+            // DEBUG: Check CFP messages
+            ACLMessage cfp_Message = myAgent.receive();
+            if (cfp_Message != null) {
+                System.out.println("🔍 " + getLocalName() + " - ProductNotificationHandler caught message:");
+                System.out.println("   Performative: " + ACLMessage.getPerformative(cfp_Message.getPerformative()));
+                System.out.println("   Protocol:     " + cfp_Message.getProtocol());
+                System.out.println("   Sender:       " + cfp_Message.getSender().getLocalName());
+                System.out.println("   Content:      " + (cfp_Message.getContent() != null ? cfp_Message.getContent().substring(0, Math.min(100, cfp_Message.getContent().length())) : "null"));
+                
+                // Check if this is a CFP with our protocol
+                if (cfp_Message.getPerformative() == ACLMessage.CFP && "pickup-task-cfp".equals(cfp_Message.getProtocol())) {
+                    messageCount++;
+                    System.out.println("✅ " + getLocalName() + " - THIS IS OUR CFP MESSAGE!");
+                    handleProductNotification(cfp_Message);
+                } else {
+                    System.out.println("⚠️ " + getLocalName() + " - NOT OUR MESSAGE, putting back");
+                    // Put back if not our message
+                    putBack(cfp_Message);
+                    block();
+                }
+            } else {
+                block();
+            }
+        }
+        
+        private void handleProductNotification(ACLMessage msg) {
+            try {
+                System.out.println("SENDING PROPOSAL FROM " + getLocalName());
                 String senderName = msg.getSender().getLocalName();
                 String content = msg.getContent();
                 
@@ -1140,55 +1296,147 @@ public class RobotAgent extends Agent {
                     return;
                 }
                 
-                // Parse notification
+                // Parse CFP
                 String conveyorName = extractValue(content, ":conveyor");
-                String conveyorIdStr = extractValue(content, ":conveyorId");
                 String location = extractValue(content, ":location");
                 
-                System.out.println("┌─ PRODUCT NOTIFICATION RECEIVED ──────────────────");
-                System.out.println("│  📩 RECEIVED");
-                System.out.println("│  Time:     " + java.time.Instant.now());
-                System.out.println("│  From:     " + senderName);
-                System.out.println("│  To:       " + getLocalName());
-                System.out.println("│  Location: " + location);
-                System.out.println("│  Status:   OPA authorized ✅");
+                System.out.println("┌─ CFP RECEIVED ───────────────────────────────────");
+                System.out.println("│  📩 CFP RECEIVED");
+                System.out.println("│  Time:        " + java.time.Instant.now());
+                System.out.println("│  From:        " + senderName);
+                System.out.println("│  To:          " + getLocalName());
+                System.out.println("│  Location:    " + location);
+                System.out.println("│  Conversation: " + msg.getConversationId());
                 System.out.println("└──────────────────────────────────────────────────");
                 
-                // Check if this robot is available and enabled to take the task
-                if (myRobot != null && myRobot.isEnabled()) {
-                    boolean hasNoTarget = myRobot.getTarget().isEmpty();
-                    boolean returningToIdle = myRobot.getTarget().startsWith("Idle Location");
-                    boolean isAvailable = (hasNoTarget || returningToIdle) && !myRobot.isCarryingProduct();
-                    
-                    if (isAvailable) {
-                        // Accept the task - set target to the conveyor
-                        String targetName = location;
-                        myRobot.setTarget(targetName);
-                        
-                        System.out.println("┌─ TASK ACCEPTED ──────────────────────────────────");
-                        System.out.println("│  ✅ ACCEPTED");
-                        System.out.println("│  Time:   " + java.time.Instant.now());
-                        System.out.println("│  Robot:  " + getLocalName());
-                        System.out.println("│  Target: " + targetName);
-                        System.out.println("│  Source: Horizontal federation with " + senderName);
-                        System.out.println("└──────────────────────────────────────────────────");
-                        
-                        // Send acknowledgement back to conveyor
-                        jade.lang.acl.ACLMessage reply = msg.createReply();
-                        reply.setPerformative(jade.lang.acl.ACLMessage.AGREE);
-                        reply.setContent("(TaskAccepted :robot \"" + getLocalName() + "\" :target \"" + targetName + "\")");
-                        send(reply);
-                    } else {
-                        System.out.println("⚠️ " + getLocalName() + " - Cannot accept task from " + senderName + " (Robot busy or disabled)");
+                // Check if robot is available and enabled
+                boolean robotExists = myRobot != null;
+                boolean robotEnabled = robotExists && myRobot.isEnabled();
+                System.out.println("🤖 " + getLocalName() + " - Robot status: exists=" + robotExists + ", enabled=" + robotEnabled);
+                
+                if (myRobot == null || !myRobot.isEnabled()) {
+                    System.out.println("⚠️ " + getLocalName() + " - Cannot bid (Robot not enabled)");
+                    return;
+                }
+                
+                boolean hasNoTarget = myRobot.getTarget().isEmpty();
+                boolean returningToIdle = myRobot.getTarget().startsWith("Idle Location");
+                boolean isCarrying = myRobot.isCarryingProduct();
+                boolean isAvailable = (hasNoTarget || returningToIdle) && !isCarrying;
+                
+                System.out.println("📊 " + getLocalName() + " - Availability check:");
+                System.out.println("   Target: '" + myRobot.getTarget() + "'");
+                System.out.println("   hasNoTarget: " + hasNoTarget);
+                System.out.println("   returningToIdle: " + returningToIdle);
+                System.out.println("   carrying: " + isCarrying);
+                System.out.println("   AVAILABLE: " + isAvailable);
+                
+                if (!isAvailable) {
+                    System.out.println("⚠️ " + getLocalName() + " - Cannot bid (Robot busy - Target: " + myRobot.getTarget() + ", Carrying: " + myRobot.isCarryingProduct() + ")");
+                    return;
+                }
+                
+                System.out.println("✅ " + getLocalName() + " - Robot IS AVAILABLE, preparing proposal...");
+                
+                // Calculate distance to conveyor
+                double distance = calculateDistanceToTarget(location);
+                int priority = myRobot.getPriority();
+                
+                // Submit proposal
+                ACLMessage proposal = msg.createReply();
+                proposal.setPerformative(ACLMessage.PROPOSE);
+                proposal.setContent(
+                    "(Proposal :robot \"" + getLocalName() + "\" " +
+                    ":priority " + priority + " " +
+                    ":distance " + distance + " " +
+                    ":available true)"
+                );
+                
+                // Verify conversation ID before sending
+                System.out.println("🔍 " + getLocalName() + " - Proposal details:");
+                System.out.println("   Original CFP ConvID: '" + msg.getConversationId() + "'");
+                System.out.println("   Proposal ConvID:     '" + proposal.getConversationId() + "'");
+                System.out.println("   Reply-to ConvID:     '" + (msg.getInReplyTo() != null ? msg.getInReplyTo() : "null") + "'");
+                
+                send(proposal);
+                
+                System.out.println("┌─ PROPOSAL SUBMITTED ─────────────────────────────");
+                System.out.println("│  📤 PROPOSAL SENT");
+                System.out.println("│  Time:        " + java.time.Instant.now());
+                System.out.println("│  From:        " + getLocalName());
+                System.out.println("│  To:          " + senderName);
+                System.out.println("│  Priority:    " + priority);
+                System.out.println("│  Distance:    " + String.format("%.2f", distance));
+                System.out.println("│  Conversation: " + msg.getConversationId());
+                System.out.println("└──────────────────────────────────────────────────");
+                
+            } catch (Exception e) {
+                System.err.println("❌ " + getLocalName() + " - Error handling CFP: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+        
+        /**
+         * Calculate distance from robot to target location
+         */
+        private double calculateDistanceToTarget(String targetLocation) {
+            try {
+                // Get robot's current idle location
+                int robotIndex = CustomNamespace.robots.indexOf(myRobot);
+                
+                // Parse idle locations
+                String idleFile = null;
+                for (SystemConfig.ComponentProperty prop : SystemConfig.COMPONENT_PROPERTIES) {
+                    if (prop != null && "idleProperties".equals(prop.name)) {
+                        idleFile = prop.jsonFile;
+                        break;
                     }
-                } else {
-                    System.out.println("⚠️ " + getLocalName() + " - Cannot accept task from " + senderName + " (Robot not enabled)");
+                }
+                
+                if (idleFile == null) {
+                    return Double.MAX_VALUE;
+                }
+                
+                org.json.simple.parser.JSONParser parser = new org.json.simple.parser.JSONParser();
+                org.json.simple.JSONArray idleLocations = (org.json.simple.JSONArray) parser.parse(new java.io.FileReader(idleFile));
+                
+                if (robotIndex < idleLocations.size()) {
+                    org.json.simple.JSONObject idlePos = (org.json.simple.JSONObject) idleLocations.get(robotIndex);
+                    double robotX = ((Number) idlePos.get("X")).doubleValue();
+                    double robotY = ((Number) idlePos.get("Y")).doubleValue();
+                    
+                    // Parse conveyor locations
+                    String conveyorFile = null;
+                    for (SystemConfig.ComponentProperty prop : SystemConfig.COMPONENT_PROPERTIES) {
+                        if (prop != null && "inputconveyorProperties".equals(prop.name)) {
+                            conveyorFile = prop.jsonFile;
+                            break;
+                        }
+                    }
+                    
+                    if (conveyorFile != null) {
+                        org.json.simple.JSONArray conveyorLocations = (org.json.simple.JSONArray) parser.parse(new java.io.FileReader(conveyorFile));
+                        
+                        // Find matching conveyor by name
+                        for (Object obj : conveyorLocations) {
+                            org.json.simple.JSONObject conveyorPos = (org.json.simple.JSONObject) obj;
+                            String name = (String) conveyorPos.get("Name");
+                            
+                            if (targetLocation.contains(name) || name.contains(targetLocation)) {
+                                double conveyorX = ((Number) conveyorPos.get("X")).doubleValue();
+                                double conveyorY = ((Number) conveyorPos.get("Y")).doubleValue();
+                                
+                                return calculateDistance(robotX, robotY, conveyorX, conveyorY);
+                            }
+                        }
+                    }
                 }
                 
             } catch (Exception e) {
-                System.err.println("❌ " + getLocalName() + " - Error handling product notification: " + e.getMessage());
-                e.printStackTrace();
+                System.err.println("Error calculating distance: " + e.getMessage());
             }
+            
+            return Double.MAX_VALUE;
         }
     }
     
@@ -1323,7 +1571,7 @@ public class RobotAgent extends Agent {
             jade.domain.FIPAAgentManagement.DFAgentDescription[] results = jade.domain.DFService.search(this, template);
             
             if (results.length > 0) {
-                jade.core.AID productionManager = results[0].getName();
+                AID productionManager = results[0].getName();
                 
                 ACLMessage heartbeat = new ACLMessage(ACLMessage.INFORM);
                 heartbeat.addReceiver(productionManager);
@@ -1596,7 +1844,7 @@ public class RobotAgent extends Agent {
          */
         private void coordinateWithPeers() {
             // Check messages from peer robots
-            ACLMessage msg = receive(jade.lang.acl.MessageTemplate.MatchProtocol("robot-peer-coordination"));
+            ACLMessage msg = receive(MessageTemplate.MatchProtocol("robot-peer-coordination"));
             
             if (msg != null && msg.getPerformative() == ACLMessage.REQUEST) {
                 // Another robot is requesting help (e.g., a blocked robot asking enabled robot to take over)
