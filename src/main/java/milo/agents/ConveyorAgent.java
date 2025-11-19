@@ -152,7 +152,7 @@ public class ConveyorAgent extends Agent {
         parallelBehaviour.addSubBehaviour(conveyorBehavior);
         parallelBehaviour.addSubBehaviour(new ConveyorProductionCommandHandler()); // Handle production commands
         parallelBehaviour.addSubBehaviour(new ConveyorHeartbeatBehaviour(this, 10000)); // Send heartbeat every 10 seconds
-//        parallelBehaviour.addSubBehaviour(new TaskCompleteNotificationHandler()); // Handle task complete notifications from robots
+        parallelBehaviour.addSubBehaviour(new RobotExitNotificationHandler()); // Handle robot exit notifications
         addBehaviour(parallelBehaviour);
         
         // Register with ProductionAgentManager
@@ -342,6 +342,23 @@ public class ConveyorAgent extends Agent {
      */
     private void broadcastProductionStatus() {
         try {
+            // CRITICAL: Check if we're waiting for winner to exit the conveyor area
+            // This prevents multiple robots from trying to pick up at the same time (collision prevention)
+            if (waitingForWinnerExit) {
+                // Periodic debug log to show we're waiting for winner to leave
+                if (System.currentTimeMillis() % 5000 < 1000) {
+                    System.out.println("┌─ CFP BLOCKED - WAITING FOR WINNER EXIT ─────────");
+                    System.out.println("│  ⏸️ COLLISION PREVENTION ACTIVE");
+                    System.out.println("│  Time:         " + java.time.Instant.now());
+                    System.out.println("│  Conveyor:     " + getLocalName());
+                    System.out.println("│  Winner Robot: " + winnerRobotAgent);
+                    System.out.println("│  Status:       Must wait for " + winnerRobotAgent + " to leave");
+                    System.out.println("│  Reason:       Prevents robot collisions at conveyor");
+                    System.out.println("└──────────────────────────────────────────────────");
+                }
+                return;
+            }
+            
             // Only broadcast if product is ready and not already assigned
             if (!getProduced() || taskAssignmentInProgress) {
                 // Periodic debug log to show why we're not broadcasting
@@ -1475,4 +1492,58 @@ public class ConveyorAgent extends Agent {
 //            }
 //        }
 //    }
+    
+    // =====================================================================
+    // ROBOT EXIT NOTIFICATION HANDLER
+    // =====================================================================
+    
+    /**
+     * Handle robot exit notifications
+     * When a robot exits the conveyor area, clear the waiting flag so next CFP can be sent
+     */
+    private class RobotExitNotificationHandler extends CyclicBehaviour {
+        @Override
+        public void action() {
+            MessageTemplate mt = MessageTemplate.and(
+                MessageTemplate.MatchPerformative(ACLMessage.INFORM),
+                MessageTemplate.MatchProtocol("robot-exit")
+            );
+            
+            ACLMessage msg = receive(mt);
+            if (msg != null) {
+                handleRobotExitNotification(msg);
+            } else {
+                block();
+            }
+        }
+        
+        private void handleRobotExitNotification(ACLMessage msg) {
+            try {
+                String content = msg.getContent();
+                String robotName = extractValue(content, ":robot");
+                
+                // Check if this is the winner robot we were waiting for
+                if (robotName != null && robotName.equals(winnerRobotAgent) && waitingForWinnerExit) {
+                    System.out.println("┌─ ROBOT EXIT NOTIFICATION ────────────────────────");
+                    System.out.println("│  🚀 WINNER ROBOT EXITED");
+                    System.out.println("│  Time:      " + java.time.Instant.now());
+                    System.out.println("│  Conveyor:  " + getLocalName());
+                    System.out.println("│  Robot:     " + robotName);
+                    System.out.println("│  Action:    Clearing waitingForWinnerExit flag");
+                    System.out.println("│  Result:    Next CFP can now be sent");
+                    System.out.println("└──────────────────────────────────────────────────");
+                    
+                    waitingForWinnerExit = false;
+                    winnerRobotAgent = null;
+                } else {
+                    System.out.println("ℹ️ " + getLocalName() + " - Received exit notification from " + robotName + 
+                                     " (not the winner " + winnerRobotAgent + ", ignoring)");
+                }
+                
+            } catch (Exception e) {
+                System.err.println("❌ " + getLocalName() + " - Error handling robot exit notification: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+    }
 }
