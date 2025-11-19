@@ -2,8 +2,11 @@ package milo.agents;
 
 import jade.core.AID;
 import jade.core.Agent;
+import jade.core.behaviours.CyclicBehaviour;
 import jade.core.behaviours.ParallelBehaviour;
 import jade.core.behaviours.TickerBehaviour;
+import jade.domain.FIPAAgentManagement.DFAgentDescription;
+import jade.domain.FIPAAgentManagement.ServiceDescription;
 import milo.opcua.server.CustomNamespace;
 import milo.federation.FederationHelper;
 import milo.security.FederationSecurityManager;
@@ -49,6 +52,8 @@ public class ConveyorAgent extends Agent {
     private volatile boolean taskAssignmentInProgress = false; // Prevent multiple CFP broadcasts
     private java.util.Queue<RobotQueueEntry> pickupQueue = new java.util.LinkedList<>(); // Robots waiting to pick up
     private String currentPickingRobot = null; // Robot currently at pickup location
+    private String winnerRobotAgent = null; // Winner robot from CNP that must exit before next CFP
+    private volatile boolean waitingForWinnerExit = false; // True when waiting for winner to leave conveyor area
     
     // Default constructor for JADE agent creation
     public ConveyorAgent() {
@@ -147,6 +152,7 @@ public class ConveyorAgent extends Agent {
         parallelBehaviour.addSubBehaviour(conveyorBehavior);
         parallelBehaviour.addSubBehaviour(new ConveyorProductionCommandHandler()); // Handle production commands
         parallelBehaviour.addSubBehaviour(new ConveyorHeartbeatBehaviour(this, 10000)); // Send heartbeat every 10 seconds
+//        parallelBehaviour.addSubBehaviour(new TaskCompleteNotificationHandler()); // Handle task complete notifications from robots
         addBehaviour(parallelBehaviour);
         
         // Register with ProductionAgentManager
@@ -356,20 +362,20 @@ public class ConveyorAgent extends Agent {
             
             // Find all RobotAgents and check OPA authorization before adding them
             int authorizedRobots = 0;
-            int totalRobots = milo.opcua.server.CustomNamespace.robots.size();
+            int totalRobots = CustomNamespace.robots.size();
             System.out.println("🔍 " + getLocalName() + " - Checking " + totalRobots + " robots for CFP");
             
             // Search for RobotAgents via Directory Facilitator (works across containers)
             try {
-                jade.domain.FIPAAgentManagement.DFAgentDescription template = new jade.domain.FIPAAgentManagement.DFAgentDescription();
-                jade.domain.FIPAAgentManagement.ServiceDescription sd = new jade.domain.FIPAAgentManagement.ServiceDescription();
+                DFAgentDescription template = new DFAgentDescription();
+                ServiceDescription sd = new ServiceDescription();
                 sd.setType("MaterialHandling");
                 template.addServices(sd);
                 
-                jade.domain.FIPAAgentManagement.DFAgentDescription[] robotResults = jade.domain.DFService.search(this, template);
+                DFAgentDescription[] robotResults = jade.domain.DFService.search(this, template);
                 System.out.println("📡 " + getLocalName() + " - Found " + robotResults.length + " robots via DF");
                 
-                for (jade.domain.FIPAAgentManagement.DFAgentDescription result : robotResults) {
+                for (DFAgentDescription result : robotResults) {
                     jade.core.AID robotAID = result.getName();
                     String robotAgentName = robotAID.getLocalName();
                     
@@ -560,12 +566,12 @@ public class ConveyorAgent extends Agent {
             System.out.println("[" + getLocalName() + "] Registering with ProductionAgentManager...");
             
             // Find ProductionAgentManager through Directory Facilitator
-            jade.domain.FIPAAgentManagement.DFAgentDescription template = new jade.domain.FIPAAgentManagement.DFAgentDescription();
-            jade.domain.FIPAAgentManagement.ServiceDescription sd = new jade.domain.FIPAAgentManagement.ServiceDescription();
+            DFAgentDescription template = new DFAgentDescription();
+            ServiceDescription sd = new ServiceDescription();
             sd.setType("ManufacturingCoordination");
             template.addServices(sd);
             
-            jade.domain.FIPAAgentManagement.DFAgentDescription[] results = jade.domain.DFService.search(this, template);
+            DFAgentDescription[] results = jade.domain.DFService.search(this, template);
             
             if (results.length > 0) {
                 jade.core.AID productionManager = results[0].getName();
@@ -803,12 +809,12 @@ public class ConveyorAgent extends Agent {
     private void sendConveyorHeartbeat() {
         try {
             // Find ProductionAgentManager
-            jade.domain.FIPAAgentManagement.DFAgentDescription template = new jade.domain.FIPAAgentManagement.DFAgentDescription();
-            jade.domain.FIPAAgentManagement.ServiceDescription sd = new jade.domain.FIPAAgentManagement.ServiceDescription();
+            DFAgentDescription template = new DFAgentDescription();
+            ServiceDescription sd = new ServiceDescription();
             sd.setType("ManufacturingCoordination");
             template.addServices(sd);
             
-            jade.domain.FIPAAgentManagement.DFAgentDescription[] results = jade.domain.DFService.search(this, template);
+            DFAgentDescription[] results = jade.domain.DFService.search(this, template);
             
             if (results.length > 0) {
                 jade.core.AID productionManager = results[0].getName();
@@ -991,12 +997,20 @@ public class ConveyorAgent extends Agent {
         
         /**
          * Evaluate proposals and assign task to best robot
+         * CRITICAL: Must only execute ONCE per CFP to prevent multiple winners
          */
         private void evaluateAndAssignTask() {
+            // GUARD: Prevent multiple evaluations for the same CFP
+            if (done) {
+                System.out.println("⚠️ " + getLocalName() + " - evaluateAndAssignTask() called but already done (conversationId: " + conversationId + ")");
+                return;
+            }
+            
             try {
                 if (proposals.isEmpty()) {
                     System.out.println("⚠️ " + getLocalName() + " - No proposals received for pickup task");
                     taskAssignmentInProgress = false;
+                    done = true;
                     return;
                 }
                 
@@ -1059,6 +1073,21 @@ public class ConveyorAgent extends Agent {
                     }
                 }
                 
+                // Mark winner and wait for them to exit conveyor area before next CFP
+                winnerRobotAgent = winner.robotAgent;
+                waitingForWinnerExit = true;
+                
+                System.out.println("┌─ WAITING FLAG SET ───────────────────────────────");
+                System.out.println("│  ⏳ WAITING FOR WINNER EXIT");
+                System.out.println("│  Time:         " + java.time.Instant.now());
+                System.out.println("│  Conveyor:     " + getLocalName());
+                System.out.println("│  Winner:       " + winnerRobotAgent);
+                System.out.println("│  Flag Set:     waitingForWinnerExit = true");
+                System.out.println("│  Next Step:    Waiting for task-complete notification");
+                System.out.println("└──────────────────────────────────────────────────");
+                
+                // Mark as done to prevent re-execution
+                done = true;
                 taskAssignmentInProgress = false;
                 
             } catch (Exception e) {
@@ -1312,4 +1341,138 @@ public class ConveyorAgent extends Agent {
         }
         return sb.toString();
     }
+//
+//    /**
+//     * Notify conveyor that robot has exited the conveyor area
+//     * This allows the conveyor to send new CFP broadcasts without risk of collision
+//     */
+//    public synchronized void notifyRobotExit(String robotAgent) {
+//        if (robotAgent.equals(winnerRobotAgent) && waitingForWinnerExit) {
+//            System.out.println("┌─ ROBOT EXIT NOTIFICATION ────────────────────────");
+//            System.out.println("│  🚀 ROBOT EXITED");
+//            System.out.println("│  Time:     " + java.time.Instant.now());
+//            System.out.println("│  Conveyor: " + getLocalName() + " (#" + conveyorId + ")");
+//            System.out.println("│  Robot:    " + robotAgent);
+//            System.out.println("│  Status:   Conveyor area clear - ready for next CFP");
+//            System.out.println("└──────────────────────────────────────────────────");
+//
+//            waitingForWinnerExit = false;
+//            winnerRobotAgent = null;
+//        }
+//    }
+//
+//    // =====================================================================
+//    // TASK COMPLETE NOTIFICATION HANDLER
+//    // =====================================================================
+//
+//    /**
+//     * Handle task complete notifications from robots
+//     * When a robot completes a task at drop-off location, it notifies conveyors
+//     * This allows conveyors to immediately send new CFP if they have products waiting
+//     */
+//    private class TaskCompleteNotificationHandler extends CyclicBehaviour {
+//        private long lastCheckTime = 0;
+//
+//        @Override
+//        public void action() {
+//            MessageTemplate mt = MessageTemplate.and(
+//                MessageTemplate.MatchPerformative(ACLMessage.INFORM),
+//                MessageTemplate.MatchProtocol("task-complete")
+//            );
+//
+//            // Debug: Log that we're checking for messages (every 10 seconds)
+//            long now = System.currentTimeMillis();
+//            if (now - lastCheckTime > 10000) {
+//                System.out.println("🔍 " + getLocalName() + " - Listening for task-complete notifications...");
+//                lastCheckTime = now;
+//            }
+//
+//            ACLMessage msg = receive(mt);
+//            if (msg != null) {
+//                handleTaskCompleteNotification(msg);
+//            } else {
+//                block();
+//            }
+//        }
+//
+//        private void handleTaskCompleteNotification(ACLMessage msg) {
+//            try {
+//                String content = msg.getContent();
+//                String robotName = extractValue(content, ":completed-by");
+//                String status = extractValue(content, ":status");
+//                String idleRobotsStr = extractValue(content, ":idle-robots");
+//                String availableRobots = extractValue(content, ":available-robots");
+//
+//                int idleRobotsCount = 0;
+//                try {
+//                    idleRobotsCount = Integer.parseInt(idleRobotsStr);
+//                } catch (Exception e) {
+//                    // Ignore parse error
+//                }
+//
+//                System.out.println("┌─ TASK COMPLETE RECEIVED ─────────────────────────");
+//                System.out.println("│  📬 NOTIFICATION RECEIVED");
+//                System.out.println("│  Time:          " + java.time.Instant.now());
+//                System.out.println("│  Conveyor:      " + getLocalName() + " (#" + conveyorId + ")");
+//                System.out.println("│  From Robot:    " + robotName);
+//                System.out.println("│  Status:        " + status);
+//                System.out.println("│  Idle Robots:   " + idleRobotsCount);
+//                System.out.println("│  Available:     [" + availableRobots + "]");
+//                System.out.println("│");
+//                System.out.println("│  Conveyor State Check:");
+//                System.out.println("│    - Produced:              " + getProduced());
+//                System.out.println("│    - TaskInProgress:        " + taskAssignmentInProgress);
+//                System.out.println("│    - WaitingForWinnerExit:  " + waitingForWinnerExit);
+//                System.out.println("│    - Idle Robots:           " + idleRobotsCount);
+//
+//                // Check if this conveyor has products waiting and idle robots are available
+//                // Also trigger if we were waiting for winner to exit (now robots are available)
+//                boolean shouldBroadcast = idleRobotsCount > 0 && !taskAssignmentInProgress &&
+//                                         (getProduced() || waitingForWinnerExit);
+//
+//                if (shouldBroadcast) {
+//                    System.out.println("│");
+//                    System.out.println("│  ✅ CONDITIONS MET - Triggering CFP");
+//
+//                    // Clear waiting flag if it was set
+//                    if (waitingForWinnerExit) {
+//                        System.out.println("│");
+//                        System.out.println("│  🔓 CLEARING WAITING FLAG");
+//                        System.out.println("│     Old: waitingForWinnerExit = true");
+//                        System.out.println("│     Old: winnerRobotAgent = " + winnerRobotAgent);
+//                        waitingForWinnerExit = false;
+//                        winnerRobotAgent = null;
+//                        System.out.println("│     New: waitingForWinnerExit = false");
+//                        System.out.println("│     New: winnerRobotAgent = null");
+//                    }
+//
+//                    System.out.println("└──────────────────────────────────────────────────");
+//
+//                    // Trigger new CFP broadcast
+//                    broadcastProductionStatus();
+//                } else {
+//                    System.out.println("│");
+//                    System.out.println("│  ❌ CONDITIONS NOT MET - No CFP broadcast");
+//
+//                    StringBuilder reasons = new StringBuilder();
+//                    if (idleRobotsCount == 0) {
+//                        reasons.append("No idle robots; ");
+//                    }
+//                    if (taskAssignmentInProgress) {
+//                        reasons.append("Task assignment in progress; ");
+//                    }
+//                    if (!getProduced() && !waitingForWinnerExit) {
+//                        reasons.append("No product ready and not waiting for winner; ");
+//                    }
+//
+//                    System.out.println("│  Reasons:       " + reasons.toString());
+//                    System.out.println("└──────────────────────────────────────────────────");
+//                }
+//
+//            } catch (Exception e) {
+//                System.err.println("❌ " + getLocalName() + " - Error handling task complete notification: " + e.getMessage());
+//                e.printStackTrace();
+//            }
+//        }
+//    }
 }
