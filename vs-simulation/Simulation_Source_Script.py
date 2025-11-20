@@ -1055,6 +1055,20 @@ def vector_multiply(v, scalar):
 def vector_length(v):
     return math.sqrt(v.X**2 + v.Y**2 + v.Z**2)
 
+# Helper to get 2D distance (ignores Z-height jitter)
+def get_distance_2d(v1, v2):
+    return ((v1.X - v2.X)**2 + (v1.Y - v2.Y)**2)**0.5
+
+# --- NEW HELPER: Hysteresis/State Check ---
+# To make this truly stable, the calling function (OnRun or move_robot_incremental)
+# MUST store the 'last_target_point'. We add a placeholder check here.
+def get_previous_target_point():
+    """Placeholder for fetching the last calculated target. Must be provided by the calling context."""
+    # In the absence of a proper state machine, we assume a static starting point
+    # or you must adapt this to read a stored variable (e.g., from robot_states).
+    # For this snippet, we return None to force initial calculation.
+    return None 
+
 def find_shortest_transition_point(robot_pos, current_pathway, next_pathway):
     """Find the shortest transition point between current pathway and next pathway/destination - optimized for performance"""
     # Get current pathway geometry
@@ -1063,26 +1077,26 @@ def find_shortest_transition_point(robot_pos, current_pathway, next_pathway):
     curr_length2 = current_pathway.getProperty('Length2').Value if current_pathway.getProperty('Length2') else 0
     curr_width1 = current_pathway.getProperty('Width1').Value if current_pathway.getProperty('Width1') else 0
     curr_width2 = current_pathway.getProperty('Width2').Value if current_pathway.getProperty('Width2') else 0
-    
+
     if is_conveyor(current_pathway.Name):
         conveyor_length = current_pathway.getProperty('ConveyorLength').Value if current_pathway.getProperty('ConveyorLength') else 0
         conveyor_width = current_pathway.getProperty('ConveyorWidth').Value if current_pathway.getProperty('ConveyorWidth') else 0
         curr_length1 = curr_length2 = conveyor_length / 2
         curr_width1 = curr_width2 = conveyor_width
-
+    
     curr_N = current_pathway.WorldPositionMatrix.N
     curr_direction = normalize_vector(curr_N)
     curr_perpendicular = vcVector.new(-curr_direction.Y, curr_direction.X, 0)
-    
+
     # Calculate current pathway boundary points
     curr_start_center = vector_subtract(curr_pos, vector_multiply(curr_direction, curr_length1))
     curr_end_center = vector_add(curr_pos, vector_multiply(curr_direction, curr_length2))
     curr_max_width = max(curr_width1, curr_width2) if curr_width1 and curr_width2 else 1000
     curr_half_width = curr_max_width / 2
-    
+
     # OPTIMIZED: Reduced points for better performance - only essential boundary points
     current_boundary_points = []
-    
+
     # Long sides (left and right edges) - reduced from 11 to 6 points
     for i in range(6):  # 6 points along each long side
         t = i / 5.0
@@ -1095,7 +1109,7 @@ def find_shortest_transition_point(robot_pos, current_pathway, next_pathway):
             ), t)
         )
         current_boundary_points.append(left_point)
-        
+
         # Right edge
         right_point = vector_add(
             vector_subtract(curr_start_center, vector_multiply(curr_perpendicular, curr_half_width)),
@@ -1105,7 +1119,7 @@ def find_shortest_transition_point(robot_pos, current_pathway, next_pathway):
             ), t)
         )
         current_boundary_points.append(right_point)
-    
+
     # Short sides (start and end edges) - reduced from 7 to 4 points
     for i in range(4):  # 4 points along each short side
         t = i / 3.0
@@ -1118,7 +1132,7 @@ def find_shortest_transition_point(robot_pos, current_pathway, next_pathway):
             ), t)
         )
         current_boundary_points.append(start_point)
-        
+
         # End edge (short side)
         end_point = vector_add(
             vector_add(curr_end_center, vector_multiply(curr_perpendicular, curr_half_width)),
@@ -1128,11 +1142,22 @@ def find_shortest_transition_point(robot_pos, current_pathway, next_pathway):
             ), t)
         )
         current_boundary_points.append(end_point)
-    
+
     # Get next pathway/destination position
     if next_pathway:
         next_pos = next_pathway.WorldPositionMatrix.P
-        
+
+        # --- SMOOTHING FIX 1: Establish a Static Reference Point ---
+        # Calculate approximate center of current boundary to use as an anchor
+        if len(current_boundary_points) > 0:
+            avg_x = sum([p.X for p in current_boundary_points]) / len(current_boundary_points)
+            avg_y = sum([p.Y for p in current_boundary_points]) / len(current_boundary_points)
+            # Z component is less critical for the anchor but kept for vector consistency
+            avg_z = sum([p.Z for p in current_boundary_points]) / len(current_boundary_points)
+            curr_path_anchor = vcVector.new(avg_x, avg_y, avg_z)
+        else:
+            curr_path_anchor = curr_pos # Fallback if boundary is empty
+
         # If next is also a pathway (not conveyor), find closest boundary-to-boundary distance
         if next_pathway.Name.startswith('Pathway Area') or next_pathway.Name.startswith('Idle Location'):
             # Get next pathway geometry
@@ -1140,85 +1165,109 @@ def find_shortest_transition_point(robot_pos, current_pathway, next_pathway):
             next_length2 = next_pathway.getProperty('Length2').Value if next_pathway.getProperty('Length2') else 0
             next_width1 = next_pathway.getProperty('Width1').Value if next_pathway.getProperty('Width1') else 0
             next_width2 = next_pathway.getProperty('Width2').Value if next_pathway.getProperty('Width2') else 0
-            
+
             next_N = next_pathway.WorldPositionMatrix.N
             next_direction = normalize_vector(next_N)
             next_perpendicular = vcVector.new(-next_direction.Y, next_direction.X, 0)
-            
+
             next_start_center = vector_subtract(next_pos, vector_multiply(next_direction, next_length1))
             next_end_center = vector_add(next_pos, vector_multiply(next_direction, next_length2))
             next_max_width = max(next_width1, next_width2) if next_width1 and next_width2 else 1000
             next_half_width = next_max_width / 2
-            
-            # Create boundary points for next pathway - OPTIMIZED
+
+            # --- SMOOTHING FIX 2: Reduced Sampling ---
             next_boundary_points = []
-            
-            # Long sides of next pathway - reduced from 11 to 6 points
-            for i in range(6):
-                t = i / 5.0
-                # Left edge
-                left_point = vector_add(
-                    vector_add(next_start_center, vector_multiply(next_perpendicular, next_half_width)),
-                    vector_multiply(vector_subtract(
-                        vector_add(next_end_center, vector_multiply(next_perpendicular, next_half_width)),
-                        vector_add(next_start_center, vector_multiply(next_perpendicular, next_half_width))
-                    ), t)
-                )
-                next_boundary_points.append(left_point)
-                
-                # Right edge
-                right_point = vector_add(
-                    vector_subtract(next_start_center, vector_multiply(next_perpendicular, next_half_width)),
-                    vector_multiply(vector_subtract(
-                        vector_subtract(next_end_center, vector_multiply(next_perpendicular, next_half_width)),
-                        vector_subtract(next_start_center, vector_multiply(next_perpendicular, next_half_width))
-                    ), t)
-                )
-                next_boundary_points.append(right_point)
-            
-            # Short sides of next pathway - reduced from 7 to 4 points
-            for i in range(4):
-                t = i / 3.0
-                # Start edge
-                start_point = vector_add(
-                    vector_add(next_start_center, vector_multiply(next_perpendicular, next_half_width)),
-                    vector_multiply(vector_subtract(
-                        vector_subtract(next_start_center, vector_multiply(next_perpendicular, next_half_width)),
-                        vector_add(next_start_center, vector_multiply(next_perpendicular, next_half_width))
-                    ), t * 3.0 / 3.0)
-                )
-                next_boundary_points.append(start_point)
-                
-                end_point = vector_add(
-                    vector_add(next_end_center, vector_multiply(next_perpendicular, next_half_width)),
-                    vector_multiply(vector_subtract(
-                        vector_subtract(next_end_center, vector_multiply(next_perpendicular, next_half_width)),
-                        vector_add(next_end_center, vector_multiply(next_perpendicular, next_half_width))
-                    ), t * 3.0 / 3.0)
-                )
-                next_boundary_points.append(end_point)
-            
-            # Find the shortest distance between any two boundary points
-            min_distance = float('inf')
-            best_current_point = None
+            steps = [0.0, 0.5, 1.0] 
+
+            # Generate simplified boundary (Long edges)
+            p1_start = vector_add(next_start_center, vector_multiply(next_perpendicular, next_half_width))
+            p1_end = vector_add(next_end_center, vector_multiply(next_perpendicular, next_half_width))
+            p2_start = vector_subtract(next_start_center, vector_multiply(next_perpendicular, next_half_width))
+            p2_end = vector_subtract(next_end_center, vector_multiply(next_perpendicular, next_half_width))
+
+            for t in steps:
+                # Interpolate Left side
+                v_left = vector_subtract(p1_end, p1_start)
+                next_boundary_points.append(vector_add(p1_start, vector_multiply(v_left, t)))
+                # Interpolate Right side
+                v_right = vector_subtract(p2_end, p2_start)
+                next_boundary_points.append(vector_add(p2_start, vector_multiply(v_right, t)))
+
+            # Short edges (Start/End caps)
+            for t in steps:
+                v_start = vector_subtract(p2_start, p1_start)
+                next_boundary_points.append(vector_add(p1_start, vector_multiply(v_start, t)))
+                v_end = vector_subtract(p2_end, p1_end)
+                next_boundary_points.append(vector_add(p1_end, vector_multiply(v_end, t)))
+
+            # --- SMOOTHING FIX 3: The "Static Anchor" Calculation ---
             best_next_point = None
-            
-            for curr_point in current_boundary_points:
-                for next_point in next_boundary_points:
-                    distance = vector_length(vector_subtract(next_point, curr_point))
-                    if distance < min_distance:
-                        min_distance = distance
-                        best_current_point = curr_point
-                        best_next_point = next_point
-            
+            min_next_dist = float('inf')
+
+            for np in next_boundary_points:
+                d = get_distance_2d(np, curr_path_anchor)
+                if d < min_next_dist:
+                    min_next_dist = d
+                    best_next_point = np
+
+            # --- OPTIMIZATION 5: TARGET LATCHING / HYSTERESIS ---
+            # If the target point is already set (from a previous frame), only recalculate if the new
+            # optimal point offers a significant improvement (e.g., 50mm reduction in distance).
+
+            # NOTE: You MUST replace get_previous_target_point() with your actual state retrieval.
+            last_target_point = get_previous_target_point() 
+
+            if last_target_point:
+                # Check how far the old target is from the current best possible point.
+                # If the old target is within a small tolerance (100mm) of the new best point's distance, 
+                # we stick to the old target to prevent thrashing.
+
+                # Distance from Anchor to the last used target
+                d_last_target = get_distance_2d(last_target_point, curr_path_anchor)
+
+                # If the best point is not significantly better than the old one, stick to the old one.
+                HYSTERESIS_THRESHOLD = 50.0 # Only switch if new point is 50mm closer
+
+                if (min_next_dist + HYSTERESIS_THRESHOLD) > d_last_target:
+                    # The improvement is too small, or the old point is better/close enough.
+                    # Find the corresponding boundary point that matches the latched target.
+                    best_next_point = min(next_boundary_points, 
+                                          key=lambda p: get_distance_2d(p, last_target_point))
+
+            # Find the point on the CURRENT pathway closest to that stable "best_next_point"
+            best_current_point = None
+            min_curr_dist = float('inf')
+
+            for cp in current_boundary_points:
+                d = get_distance_2d(cp, best_next_point)
+                if d < min_curr_dist:
+                    min_curr_dist = d
+                    best_current_point = cp
+
+            # --- SMOOTHING FIX 4: The "Deep Commit" Nudge ---
+            if best_next_point:
+                # Calculate vector from Entry Point towards the Center of Next Pathway
+                entry_to_center = vector_subtract(next_pos, best_next_point)
+                dist_to_center = vector_length(entry_to_center)
+
+                if dist_to_center > 1.0:
+                    nudge_dir = vector_multiply(entry_to_center, 1.0/dist_to_center)
+                    offset_val = 200.0 
+
+                    if offset_val > dist_to_center: offset_val = dist_to_center * 0.9
+
+                    offset_vec = vector_multiply(nudge_dir, offset_val)
+                    best_next_point = vector_add(best_next_point, offset_vec)
+
             return best_current_point, best_next_point
-        
+
         else:
-            # Next is a conveyor - find closest point on current pathway to conveyor center
+            # Next is a conveyor
+            # Use the anchor logic here too for consistency
             best_exit_point = min(current_boundary_points, 
-                                key=lambda p: vector_length(vector_subtract(next_pos, p)))
+                                  key=lambda p: get_distance_2d(next_pos, p))
             return best_exit_point, next_pos
-    
+
     else:
         # No next pathway - use pathway center as default
         return curr_pos, curr_pos
@@ -3659,5 +3708,3 @@ def OnReset():
                     else:
                         prop.Value = 0
 '''
-
-
