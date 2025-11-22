@@ -415,7 +415,7 @@ public class ProductionAgentManager extends Agent {
                 String content = msg.getContent();
                 AID senderAID = msg.getSender();
                 
-                System.out.println("[" + myAgent.getLocalName() + "] Received acknowledgement from " + 
+                System.out.println("[" + myAgent.getLocalName() + "] 💓 Received heartbeat from " +
                     senderAID.getLocalName() + ": " + content);
                 
                 // Update agent heartbeat
@@ -481,7 +481,7 @@ public class ProductionAgentManager extends Agent {
                     Integer completedTasks = (Integer) status.properties.getOrDefault("completedTasks", 0);
                     status.properties.put("completedTasks", completedTasks + 1);
                     
-                    System.out.println("✅ [" + myAgent.getLocalName() + "] " + senderAID.getLocalName() + 
+                    System.out.println("✅ [" + myAgent.getLocalName() + "] " + senderAID.getLocalName() +
                         " marked as IDLE (Total completed: " + (completedTasks + 1) + ")");
                 }
                 
