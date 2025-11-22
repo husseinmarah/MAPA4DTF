@@ -5,6 +5,7 @@ import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue;
 import org.eclipse.milo.opcua.stack.core.types.builtin.Variant;
 
 public class RobotTemplate {
+    private String robotName;
     private UaVariableNode location;
     private UaVariableNode nextLocation;
     private UaVariableNode batteryLevel;
@@ -99,5 +100,12 @@ public class RobotTemplate {
 
     public void setEnabled(boolean value) {
         enabledRobot.setValue(new DataValue(new Variant(value)));
+    }
+
+    public void setRobotName(String robotName) {
+        this.robotName = robotName;
+    }
+    public String getRobotName() {
+        return robotName;
     }
 }
