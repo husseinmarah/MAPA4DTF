@@ -1200,65 +1200,63 @@ def find_shortest_transition_point(robot_pos, current_pathway, next_pathway):
                 v_end = vector_subtract(p2_end, p1_end)
                 next_boundary_points.append(vector_add(p1_end, vector_multiply(v_end, t)))
                 
-            # --- SMOOTHING FIX 7: Holistic Trajectory Evaluation ---
-            # Instead of picking the best entry and exit points separately, we now evaluate
-            # them as pairs to find the best overall trajectory. This prevents the robot from
-            # picking a locally optimal exit point that leads to a globally awkward turn.
-            # --- SMOOTHING FIX 8: Ideal Trajectory Scoring ---
-            # This revised logic evaluates each potential exit point against an "ideal" straight-line
-            # path from the robot to the next entry point. It heavily penalizes exit points that
-            # deviate from this ideal line, preventing the robot from being pulled toward adjacent pathways.
+            # --- HYSTERESIS IMPROVEMENT: Holistic & Ideal Trajectory Scoring ---
+            # This logic evaluates exit points against an "ideal" straight-line path to the next
+            # entry point. It penalizes deviations, preventing the robot from being pulled toward
+            # adjacent pathway borders and making false turns.
             best_current_point = None
             best_next_point = None
             best_trajectory_score = float('inf')
-            
+
             # Weights for scoring the trajectory
             ALIGNMENT_WEIGHT = 1.5  # Heavily favors straight lines
             EXIT_TO_ENTRY_WEIGHT = 1.0 # Standard weight for the direct jump distance
             EXIT_TO_CENTER_WEIGHT = 0.2 # Minor weight to gently pull towards the next pathway's center
-            
+            OFF_TRACK_PENALTY_WEIGHT = 2.0 # Heavy penalty for deviating from the ideal path
 
             # First, determine the single best entry point on the next pathway from our current anchor.
             # This provides a stable target for our ideal trajectory calculation.
             ideal_next_point = min(next_boundary_points, key=lambda np: get_distance_2d(curr_path_anchor, np))
 
             for cp in current_boundary_points:
-                # For each candidate exit point (cp), find the best corresponding entry point (np)
-                # on the next pathway.
-                candidate_next_point = min(next_boundary_points, key=lambda np: get_distance_2d(cp, np))
-                
                 # --- Calculate Trajectory Score ---
-                
-                # Vector from the robot's current position to the candidate exit point (cp)
-                v_robot_to_exit = vector_subtract(cp, robot_pos)
-                # Vector from the candidate exit point (cp) to the candidate entry point (np)
-                v_exit_to_entry = vector_subtract(candidate_next_point, cp)
 
                 # 1. Alignment Score: Penalize trajectories that require sharp turns.
-                # A dot product of 1 means perfect alignment (straight line). A value of -1 is a 180-degree turn.
-                # We use (1.0 - dot_product) so that a perfect alignment has a score of 0.
+                v_robot_to_exit = vector_subtract(cp, robot_pos)
+                v_exit_to_entry = vector_subtract(ideal_next_point, cp)
                 alignment_penalty = 0.0
                 if vector_length(v_robot_to_exit) > 1.0 and vector_length(v_exit_to_entry) > 1.0:
                     norm1 = normalize_vector(v_robot_to_exit)
                     norm2 = normalize_vector(v_exit_to_entry)
                     dot_product = (norm1.X * norm2.X) + (norm1.Y * norm2.Y)
                     alignment_penalty = (1.0 - dot_product) * ALIGNMENT_WEIGHT
-                
-                # 2. Distance Score: The cost of the actual travel path.
+
+                # 2. Off-Track Penalty: This is the core of the hysteresis.
+                # It heavily penalizes exit points that deviate from the ideal straight-line path.
+                v_robot_to_ideal = vector_subtract(ideal_next_point, robot_pos)
+                v_robot_to_cp = vector_subtract(cp, robot_pos)
+                off_track_penalty = 0.0
+                v_robot_to_ideal_len_sq = vector_length(v_robot_to_ideal)**2
+                if v_robot_to_ideal_len_sq > 1.0:
+                    # Project v_robot_to_cp onto v_robot_to_ideal to find the closest point on the ideal line.
+                    t = ((v_robot_to_cp.X * v_robot_to_ideal.X) + (v_robot_to_cp.Y * v_robot_to_ideal.Y)) / v_robot_to_ideal_len_sq
+                    t = max(0, min(1, t)) # Clamp it to the segment
+                    closest_point_on_ideal_line = vector_add(robot_pos, vector_multiply(v_robot_to_ideal, t))
+                    # The "off-track penalty" is the distance from the candidate exit point to the ideal line.
+                    off_track_penalty = get_distance_2d(cp, closest_point_on_ideal_line)
+
+                # 3. Distance Score: The cost of the actual travel path.
                 d_robot_to_exit = get_distance_2d(robot_pos, cp)
-                d_exit_to_entry = get_distance_2d(cp, candidate_next_point)
+                d_exit_to_entry = get_distance_2d(cp, ideal_next_point)
                 d_exit_to_center = get_distance_2d(cp, next_pos) # Distance to the center of the next pathway
-                
+
                 # Combine scores. Lower is better.
-                trajectory_score = (d_robot_to_exit + d_exit_to_entry * EXIT_TO_ENTRY_WEIGHT) * (1.0 + alignment_penalty) + (d_exit_to_center * EXIT_TO_CENTER_WEIGHT)
+                trajectory_score = (d_robot_to_exit + d_exit_to_entry * EXIT_TO_ENTRY_WEIGHT) * (1.0 + alignment_penalty) \
+                                   + (d_exit_to_center * EXIT_TO_CENTER_WEIGHT) \
+                                   + (off_track_penalty * OFF_TRACK_PENALTY_WEIGHT)
 
                 if trajectory_score < best_trajectory_score:
                     best_trajectory_score = trajectory_score
-                # The ideal path is a straight line from the robot to the ideal_next_point.
-                # We calculate how far our candidate exit point (cp) deviates from this line.
-                v_robot_to_ideal = vector_subtract(ideal_next_point, robot_pos)
-                v_robot_to_cp = vector_subtract(cp, robot_pos)
-                
                 # Project v_robot_to_cp onto v_robot_to_ideal to find the closest point on the ideal line.
                 t = ((v_robot_to_cp.X * v_robot_to_ideal.X) + (v_robot_to_cp.Y * v_robot_to_ideal.Y)) / (vector_length(v_robot_to_ideal)**2)
                 t = max(0, min(1, t)) # Clamp it to the segment
@@ -2062,7 +2060,7 @@ def initiate_backup_maneuver(robot, robot_index):
     
     # Clear current movement and set backup movement
     vehicle.clearMove()
-    vehicle.MaxSpeed = 400  # Slower speed for backup
+    vehicle.MaxSpeed = 800  # Slower speed for backup
     vehicle.addControlPoint(backup_position)
     
     # Reset movement state to allow re-planning after backup
