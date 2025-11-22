@@ -16,6 +16,7 @@ import milo.opcua.server.RobotTemplate;
 import milo.opcua.server.SystemConfig;
 import milo.security.FederationSecurityManager;
 import milo.security.FederationSecurityManager.SecurityContext;
+import milo.utils.DelayUtils;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -53,6 +54,9 @@ public class RobotAgent extends Agent {
     // Location tracking for conveyor exit notification
     private String previousLocation = ""; // Track previous location to detect when robot leaves conveyor area
     private String lastPickupConveyor = null; // Track which conveyor the robot picked up from
+    
+    // FAIRNESS: Track task completions for each conveyor to balance workload
+    private static final java.util.Map<String, Integer> conveyorTaskCompletions = new java.util.concurrent.ConcurrentHashMap<>();
 
     // =====================================================================
     // FEDERATION SUPPORT
@@ -77,15 +81,16 @@ public class RobotAgent extends Agent {
      * DEBUGGING WRAPPER: Logs ALL target changes with full stack trace
      * Use this instead of myRobot.setTarget() to track where targets are being set
      */
-    private void setRobotTarget(String newTarget, String source) {
+    private void setRobotTarget(String newTarget, String action) {
         if (myRobot == null) return;
 
         String oldTarget = myRobot.getTarget();
-        System.out.println("🎯🎯🎯 [SET TARGET] " + getLocalName() + " - TARGET CHANGE");
-        System.out.println("   Old Target: '" + oldTarget + "'");
-        System.out.println("   New Target: '" + newTarget + "'");
-        System.out.println("   Source:     " + source);
-        System.out.println("   Thread:     " + Thread.currentThread().getName());
+        System.out.println("┌─ SET TARGET ───────────────────────────────────────");
+        System.out.println("│  Old Target: '" + oldTarget + "'");
+        System.out.println("│  New Target: '" + newTarget + "'");
+        System.out.println("│  Action: '" + action + "'");
+        System.out.println("│  Thread:     " + Thread.currentThread().getName());
+        System.out.println("└───────────────────────────────────────────────────");
         myRobot.setTarget(newTarget);
     }
 
@@ -106,7 +111,7 @@ public class RobotAgent extends Agent {
                 System.err.println("❌ [ROBOT INIT ERROR] " + getLocalName() + " - Invalid robotId " + robotId + " (robots.size=" + CustomNamespace.robots.size() + ")");
             }
         }
-        
+
         // STEP 1: Detect exact container and authenticate with Keycloak
         String containerName = "unknown";
         try {
@@ -309,6 +314,11 @@ public class RobotAgent extends Agent {
     // MAIN ROBOT BEHAVIOR - Well organized
     // =====================================================================
     TickerBehaviour robotBehavior = new TickerBehaviour(this, AGENT_INTERVAL) {
+        @Override
+        public void onStart() {
+            myRobot.setRobotName(myAgent.getLocalName());
+        }
+
         private long lastIdleLogTime = 0;
         
         @Override
@@ -518,7 +528,7 @@ public class RobotAgent extends Agent {
                 System.out.println("│  Status:   Moving to idle station");
                 System.out.println("└──────────────────────────────────────────────────");
                 
-                setRobotTarget(idleLocationName, "assignIdleLocation() - After dropoff");
+                setRobotTarget(idleLocationName, "IDLE_ACTION");
             } else {
                 System.err.println("❌ " + getLocalName() + " - Invalid robot index for idle location: " + robotIndex);
             }
@@ -567,10 +577,10 @@ public class RobotAgent extends Agent {
                 System.out.println("│  CarryingProd: " + robot.isCarryingProduct());
                 
                 // Set the new target using wrapper for tracking
-                setRobotTarget(dropOffTarget, "assignDropOffTarget() - After pickup");
+                setRobotTarget(dropOffTarget, "TARGET_ACTION");
                 
                 // Small delay to allow OPC-UA to process
-                Thread.sleep(200);
+//                Thread.sleep(200);
                 
                 // Verify target was actually written to OPC-UA
                 String verifiedTarget = robot.getTarget();
@@ -584,8 +594,6 @@ public class RobotAgent extends Agent {
                 System.out.println("│  ✓ Verified NextLoc:  '" + verifiedNextLocation + "'");
                 System.out.println("│  ✓ Verified Location: '" + verifiedLocation + "'");
                 System.out.println("│  ✓ Target Set OK:     " + targetSetCorrectly);
-                System.out.println("│");
-                System.out.println("│  Type:         Drop-off location (OutputConveyor)");
                 System.out.println("│  Status:       " + (targetSetCorrectly ? "✅ Target written to OPC-UA" : "❌ TARGET NOT SET!"));
                 System.out.println("└──────────────────────────────────────────────────");
                 
@@ -595,7 +603,7 @@ public class RobotAgent extends Agent {
                     System.err.println("   Got:      '" + verifiedTarget + "'");
                     // Try setting it again
                     System.out.println("🔄 Retrying target assignment...");
-                    setRobotTarget(dropOffTarget, "assignDropOffTarget() - RETRY");
+                    setRobotTarget(dropOffTarget, "TARGET_ACTION");
                 }
             } else {
                 System.out.println("⚠️ " + getLocalName() + " - No drop-off conveyors available");
@@ -894,21 +902,12 @@ public class RobotAgent extends Agent {
         String robotLocation = robot.getLocation();
         String robotTarget = robot.getTarget();
         String robotNextLocation = robot.getNextLocation();
-        
-        System.out.println("┌─ PICKUP CHECK ───────────────────────────────────");
-        System.out.println("│  Robot:        " + getLocalName());
-        System.out.println("│  Location:     '" + robotLocation + "' (length: " + robotLocation.length() + ")");
-        System.out.println("│  Target:       '" + robotTarget + "'");
-        System.out.println("│  NextLocation: '" + robotNextLocation + "'");
-        System.out.println("│  Carrying:     " + isCarryingProduct);
-        System.out.println("└──────────────────────────────────────────────────");
 
         // Check for pickup at both input conveyors
         for (int i = 0; i < CustomNamespace.getInputConveyors().size(); i++) {
             String conveyorTargetName = getConveyorTargetName(i + 1);
             
             if (robotLocation.equals(conveyorTargetName)) {
-                System.out.println("  🔍 Comparing: '" + robotLocation + "' == '" + conveyorTargetName + "' ? " + robotLocation.equals(conveyorTargetName));
                 ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(i);
                 String conveyorAgentName = "ConveyorAgent" + (i + 1);
 
@@ -990,6 +989,13 @@ public class RobotAgent extends Agent {
             // Notify all conveyors that robot is available and returning to idle
             notifyConveyorsRobotAvailable();
             
+            // FAIRNESS: Record the task completion for the conveyor it came from
+            String lastConveyor = lastPickupConveyor; // Capture before clearing
+            if (lastConveyor != null) {
+                conveyorTaskCompletions.merge(lastConveyor, 1, Integer::sum);
+                System.out.println("⚖️ " + getLocalName() + " - Logged task completion for " + lastConveyor + ". Total: " + conveyorTaskCompletions.get(lastConveyor));
+            }
+
             // Send robot back to idle location
             assignIdleLocation(robot);
         }
@@ -1425,7 +1431,7 @@ public class RobotAgent extends Agent {
                 
                 // Assign target to robot
                 if (myRobot != null && location != null) {
-                    setRobotTarget(location, "TaskResponseHandler.handleTaskAcceptance() - ACCEPT_PROPOSAL received");
+                    setRobotTarget(location, "ACCEPT_PROPOSAL");
                     System.out.println("📍 " + getLocalName() + " - Target set to: " + myRobot.getTarget());
                     
                     // Pre-register in the conveyor's pickup queue as the winner
@@ -1532,6 +1538,7 @@ public class RobotAgent extends Agent {
             ACLMessage cfpMsg = receive(mt);
             if (cfpMsg != null) {
                 messageCount++;
+                DelayUtils.randomDelay(1, 500); // Default 1-500 ms range
                 System.out.println("✅ " + getLocalName() + " - Received CFP message from " + cfpMsg.getSender().getLocalName());
                 handleProductNotification(cfpMsg);
             } else {
@@ -1593,6 +1600,14 @@ public class RobotAgent extends Agent {
                 System.out.println("   AVAILABLE: " + isAvailable);
                 
                 if (!isAvailable) {
+                    // CRITICAL FIX: If robot is not available because it has active proposals, log it.
+                    // This prevents the robot from bidding on a new CFP while waiting for a response from another.
+                    synchronized (activeProposals) {
+                        if (!activeProposals.isEmpty()) {
+                            System.out.println("⚠️ " + getLocalName() + " - Cannot bid (Waiting for response on " + activeProposals.size() + " active proposal(s))");
+                            return;
+                        }
+                    }
                     System.out.println("⚠️ " + getLocalName() + " - Cannot bid (Robot busy - Target: " + myRobot.getTarget() + ", Carrying: " + myRobot.isCarryingProduct() + ")");
                     return;
                 }
@@ -1602,6 +1617,11 @@ public class RobotAgent extends Agent {
                 // Calculate distance to conveyor
                 double distance = calculateDistanceToTarget(location);
                 int priority = myRobot.getPriority();
+
+                // FAIRNESS: Add a bonus to the bid for the least serviced conveyor
+                double fairnessBonus = calculateFairnessBonus(senderName);
+                double effectivePriority = priority + fairnessBonus;
+                System.out.println("⚖️ " + getLocalName() + " - Fairness Bonus for " + senderName + ": " + fairnessBonus + " (Effective Priority: " + effectivePriority + ")");
                 
                 // Submit proposal
                 ACLMessage proposal = msg.createReply();
@@ -1609,7 +1629,7 @@ public class RobotAgent extends Agent {
                 proposal.setContent(
                     "(Proposal :robot \"" + getLocalName() + "\" " +
                     ":priority " + priority + " " +
-                    ":distance " + distance + " " +
+                    ":distance " + distance + " " + // Distance is still sent for tie-breaking
                     ":available true)"
                 );
                 
@@ -1635,13 +1655,42 @@ public class RobotAgent extends Agent {
                 System.out.println("│  To:          " + senderName);
                 System.out.println("│  Priority:    " + priority);
                 System.out.println("│  Distance:    " + String.format("%.2f", distance));
-                System.out.println("│  Conversation: " + msg.getConversationId());
+                System.out.println("│  Effective Priority (with bonus): " + effectivePriority);
                 System.out.println("└──────────────────────────────────────────────────");
                 
             } catch (Exception e) {
                 System.err.println("❌ " + getLocalName() + " - Error handling CFP: " + e.getMessage());
                 e.printStackTrace();
             }
+        }
+
+        /**
+         * FAIRNESS: Calculate a bidding bonus to prioritize less-serviced conveyors.
+         * This helps balance the workload between multiple conveyors.
+         */
+        private double calculateFairnessBonus(String conveyorAgentName) {
+            int myCompletions = conveyorTaskCompletions.getOrDefault(conveyorAgentName, 0);
+            int otherCompletions = 0;
+            int numOtherConveyors = 0;
+
+            // Find the average completions of OTHER conveyors
+            for (java.util.Map.Entry<String, Integer> entry : conveyorTaskCompletions.entrySet()) {
+                if (!entry.getKey().equals(conveyorAgentName)) {
+                    otherCompletions += entry.getValue();
+                    numOtherConveyors++;
+                }
+            }
+
+            if (numOtherConveyors > 0) {
+                double avgOtherCompletions = (double) otherCompletions / numOtherConveyors;
+
+                // If this conveyor has been serviced less than others, add a bonus.
+                // The bonus is larger the greater the difference.
+                if (myCompletions < avgOtherCompletions) {
+                    return (avgOtherCompletions - myCompletions) * 0.5; // The 0.5 is a tuning factor
+                }
+            }
+            return 0.0; // No bonus if this conveyor is serviced more or equally.
         }
         
         /**
