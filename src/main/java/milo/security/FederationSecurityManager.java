@@ -236,7 +236,7 @@ public class FederationSecurityManager {
                 serviceName + "Service", "main", "service", 1.0, "active", serviceName
             );
             
-            // Print detailed OPA policy evaluation box
+            // Print detailed OPA policy
             System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
             System.out.println("│  " + (decision.allowed ? "✅ ALLOWED" : "❌ DENIED"));
             System.out.println("│  Time:        " + java.time.Instant.now());
@@ -613,17 +613,17 @@ public class FederationSecurityManager {
         boolean hasToken = token != null && !token.isExpired();
         
         // Debug logging - show specific agent token info
-        System.out.println("┌─ TOKEN VALIDATION ────────────────────────────────");
-        System.out.println("│  Agent: " + agentName);
-        System.out.println("│  Has Token: " + hasToken);
-        if (token != null) {
-            System.out.println("│  Token Expired: " + token.isExpired());
-            System.out.println("│  Token Refresh Needed: " + token.needsRefresh());
-        } else {
-            System.out.println("│  Token: null");
-        }
-        System.out.println("└───────────────────────────────────────────────────");
-        
+//        System.out.println("┌─ TOKEN VALIDATION ────────────────────────────────");
+//        System.out.println("│  Agent: " + agentName);
+//        System.out.println("│  Has Token: " + hasToken);
+//        if (token != null) {
+//            System.out.println("│  Token Expired: " + token.isExpired());
+//            System.out.println("│  Token Refresh Needed: " + token.needsRefresh());
+//        } else {
+//            System.out.println("│  Token: null");
+//        }
+//        System.out.println("└───────────────────────────────────────────────────");
+
         return hasToken;
     }
     
