@@ -36,7 +36,7 @@ public class RobotAgent extends Agent {
     // =====================================================================
     // CONFIGURATION - Agent-specific
     // =====================================================================
-    private static final int AGENT_INTERVAL = 1000; // 1 second for maximum responsiveness
+    private static final int AGENT_INTERVAL = 5000; // 1 second for maximum responsiveness
     private int robotId; // Specific robot this agent manages
     private RobotTemplate myRobot; // Reference to this agent's robot
     
@@ -105,8 +105,12 @@ public class RobotAgent extends Agent {
             // Get reference to this specific robot (index is robotId - 1)
             if (robotId > 0 && robotId <= CustomNamespace.robots.size()) {
                 myRobot = CustomNamespace.robots.get(robotId - 1);
-                System.out.println("🤖 [ROBOT INIT] " + getLocalName() + " mapped to RobotTemplate index " + (robotId - 1) + " (robotId=" + robotId + ")");
-                System.out.println("   Current Target: '" + myRobot.getTarget() + "'");
+                System.out.println("┌─ ROBOT INIT ──────────────────────────────────────");
+                System.out.println("│  🤖 Initialized");
+                System.out.println("│  Agent: " + getLocalName());
+                System.out.println("│  Robot ID: " + robotId);
+                System.out.println("│  Current Target: " + myRobot.getTarget());
+                System.out.println("└───────────────────────────────────────────────────");
             } else {
                 System.err.println("❌ [ROBOT INIT ERROR] " + getLocalName() + " - Invalid robotId " + robotId + " (robots.size=" + CustomNamespace.robots.size() + ")");
             }
@@ -183,7 +187,7 @@ public class RobotAgent extends Agent {
         addBehaviour(robotBehavior);
         addBehaviour(new ProductionCommandHandler()); // Handle production commands
         addBehaviour(new HeartbeatBehaviour(this, 10000)); // Send heartbeat every 10 seconds
-        addBehaviour(new PeerCoordinationBehaviour(this, 3000)); // Peer coordination every 3 seconds
+        addBehaviour(new PeerCoordinationBehaviour(this, 5000)); // Peer coordination every 3 seconds
         addBehaviour(new ProductNotificationHandler()); // Handle CFP from conveyors
         addBehaviour(new TaskResponseHandler()); // Handle ACCEPT/REJECT from conveyors
         
@@ -1364,7 +1368,11 @@ public class RobotAgent extends Agent {
         public HeartbeatBehaviour(Agent agent, long period) {
             super(agent, period);
         }
-        
+        @Override
+        public void onStart() {
+            DelayUtils.randomDelay(10, 1000);
+        }
+
         @Override
         protected void onTick() {
             sendHeartbeat();
@@ -1524,7 +1532,7 @@ public class RobotAgent extends Agent {
             // Periodic heartbeat to confirm behavior is running
             long now = System.currentTimeMillis();
             if (now - lastHeartbeat > 10000) {
-                System.out.println("💓 " + getLocalName() + " - ProductNotificationHandler ACTIVE (processed " + messageCount + " CFPs, waiting for CFP messages...)");
+                System.out.println("\uD83D\uDCE2 " + getLocalName() + " - ACTIVE CFP Handler (processed " + messageCount + " CFPs, waiting for CFP messages...)");
                 lastHeartbeat = now;
             }
             
@@ -1591,14 +1599,17 @@ public class RobotAgent extends Agent {
                 boolean returningToIdle = myRobot.getTarget().startsWith("Idle Location");
                 boolean isCarrying = myRobot.isCarryingProduct();
                 boolean isAvailable = (hasNoTarget || returningToIdle) && !isCarrying;
-                
+
                 System.out.println("📊 " + getLocalName() + " - Availability check:");
+                System.out.println("┌─ AVAILABILITY CHECK ─────────────────────────────");
                 System.out.println("   Target: '" + myRobot.getTarget() + "'");
                 System.out.println("   hasNoTarget: " + hasNoTarget);
                 System.out.println("   returningToIdle: " + returningToIdle);
                 System.out.println("   carrying: " + isCarrying);
-                System.out.println("   AVAILABLE: " + isAvailable);
-                
+                System.out.println("   available: " + isAvailable);
+                System.out.println("└──────────────────────────────────────────────────");
+
+
                 if (!isAvailable) {
                     // CRITICAL FIX: If robot is not available because it has active proposals, log it.
                     // This prevents the robot from bidding on a new CFP while waiting for a response from another.
@@ -1612,7 +1623,7 @@ public class RobotAgent extends Agent {
                     return;
                 }
                 
-                System.out.println("✅ " + getLocalName() + " - Robot IS AVAILABLE, preparing proposal...");
+                System.out.println("✅ " + getLocalName() + " - Robot Preparing a Proposal...");
                 
                 // Calculate distance to conveyor
                 double distance = calculateDistanceToTarget(location);
@@ -1633,12 +1644,7 @@ public class RobotAgent extends Agent {
                     ":available true)"
                 );
                 
-                // Verify conversation ID before sending
-                System.out.println("🔍 " + getLocalName() + " - Proposal details:");
-                System.out.println("   Original CFP ConvID: '" + msg.getConversationId() + "'");
-                System.out.println("   Proposal ConvID:     '" + proposal.getConversationId() + "'");
-                System.out.println("   Reply-to ConvID:     '" + (msg.getInReplyTo() != null ? msg.getInReplyTo() : "null") + "'");
-                
+                // sending the proposal
                 send(proposal);
                 
                 // Track this proposal's conversation ID
@@ -2087,14 +2093,18 @@ public class RobotAgent extends Agent {
     
     /**
      * Peer Coordination Behaviour - Enables horizontal federation between enabled robots
-     * Only enabled robots participate in peer coordination to handle tasks from blocked robots
+     * Only enabled robots to participate in peer coordination to handle tasks from blocked robots
      */
     private class PeerCoordinationBehaviour extends TickerBehaviour {
         
         public PeerCoordinationBehaviour(Agent agent, long period) {
             super(agent, period);
         }
-        
+        @Override
+        public void onStart() {
+            DelayUtils.randomDelay(10, 1000);
+        }
+
         @Override
         protected void onTick() {
             // Only participate in peer coordination if this robot is enabled
