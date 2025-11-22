@@ -32,6 +32,7 @@ public class ConveyorAgent extends Agent {
     private UaVariableNode enabledNode;
     private int conveyorId;
     private ConveyorAgent myConveyorReference; // Reference to conveyor in the namespace
+    private String agentName;
     
     // =====================================================================
     // FEDERATION SUPPORT
@@ -89,7 +90,7 @@ public class ConveyorAgent extends Agent {
                 this.enabledNode = myConveyorReference.enabledNode;
             }
         }
-        
+
         // STEP 1: Detect container and authenticate with Keycloak
         String containerName = "unknown";
         try {
@@ -164,6 +165,11 @@ public class ConveyorAgent extends Agent {
     // MAIN CONVEYOR BEHAVIOR
     // =====================================================================
     TickerBehaviour conveyorBehavior = new TickerBehaviour(this, AGENT_INTERVAL) {
+        @Override
+        public void onStart() {
+            agentName = myAgent.getLocalName();
+        }
+
         @Override
         public void onTick() {
             // 0. Check OPA authorization and update enabled status
@@ -361,8 +367,12 @@ public class ConveyorAgent extends Agent {
             
             // Only broadcast if product is ready and not already assigned
             if (!getProduced() || taskAssignmentInProgress) {
-                // Periodic debug log to show why we're not broadcasting
-                if (System.currentTimeMillis() % 10000 < 1000) {
+                // Periodic debug log to show why we're not broadcasting.
+                // Only log if there's actually a product, to avoid spamming the console.
+                if (getProduced() && System.currentTimeMillis() % 10000 < 1000) {
+                    System.out.println("┌─ CFP BLOCKED - TASK ASSIGNMENT IN PROGRESS ─────────");
+                    System.out.println("│  Conveyor: " + getLocalName());
+                    System.out.println("│  Status:   Another CFP process is already running for this conveyor.");
                     System.out.println("⏸️ " + getLocalName() + " - Not broadcasting CFP (Produced: " + getProduced() + ", TaskInProgress: " + taskAssignmentInProgress + ")");
                 }
                 return;
@@ -1048,12 +1058,16 @@ public class ConveyorAgent extends Agent {
                 
                 // Sort proposals: higher priority first, then shorter distance
                 java.util.Collections.sort(robotProposals, (a, b) -> {
-                    // Higher priority wins
-                    int priorityCompare = Integer.compare(b.priority, a.priority);
+                    // FAIRNESS: Use effective priority (priority + fairness bonus) for primary sorting
+                    double effectivePriorityA = a.priority + a.fairnessBonus;
+                    double effectivePriorityB = b.priority + b.fairnessBonus;
+
+                    int priorityCompare = Double.compare(effectivePriorityB, effectivePriorityA);
                     if (priorityCompare != 0) {
                         return priorityCompare;
                     }
-                    // If priorities equal, shorter distance wins
+
+                    // If effective priorities are equal, use distance as a tie-breaker
                     return Double.compare(a.distance, b.distance);
                 });
                 
@@ -1067,7 +1081,7 @@ public class ConveyorAgent extends Agent {
                 System.out.println("│  Proposals:  " + robotProposals.size() + " received");
                 System.out.println("│  Winner:     " + winner.robotAgent);
                 System.out.println("│  Priority:   " + winner.priority);
-                System.out.println("│  Distance:   " + String.format("%.2f", winner.distance));
+                System.out.println("│  Effective Priority: " + (winner.priority + winner.fairnessBonus));
                 System.out.println("└──────────────────────────────────────────────────");
                 
                 // Send ACCEPT-PROPOSAL to winner
@@ -1125,8 +1139,9 @@ public class ConveyorAgent extends Agent {
                 // Extract priority and distance from proposal
                 int priority = extractIntValue(content, ":priority");
                 double distance = extractDoubleValue(content, ":distance");
-                
-                return new RobotProposal(robotAgent, priority, distance, proposal);
+                double fairnessBonus = extractDoubleValue(content, ":fairnessBonus");
+
+                return new RobotProposal(robotAgent, priority, distance, fairnessBonus, proposal);
                 
             } catch (Exception e) {
                 System.err.println("❌ " + getLocalName() + " - Error parsing proposal: " + e.getMessage());
@@ -1176,12 +1191,14 @@ public class ConveyorAgent extends Agent {
         final String robotAgent;
         final int priority;
         final double distance;
+        final double fairnessBonus;
         final ACLMessage originalMessage;
         
-        RobotProposal(String robotAgent, int priority, double distance, ACLMessage originalMessage) {
+        RobotProposal(String robotAgent, int priority, double distance, double fairnessBonus, ACLMessage originalMessage) {
             this.robotAgent = robotAgent;
             this.priority = priority;
             this.distance = distance;
+            this.fairnessBonus = fairnessBonus;
             this.originalMessage = originalMessage;
         }
     }
@@ -1227,7 +1244,7 @@ public class ConveyorAgent extends Agent {
         System.out.println("┌─ PICKUP RESERVED FOR WINNER ─────────────────────");
         System.out.println("│  🏆 CFP WINNER RESERVED");
         System.out.println("│  Time:      " + java.time.Instant.now());
-        System.out.println("│  Conveyor:  " + getLocalName() + " (#" + conveyorId + ")");
+        System.out.println("│  Conveyor:  " + agentName + " (#" + conveyorId + ")");
         System.out.println("│  Robot:     " + robotAgent);
         System.out.println("│  Priority:  " + priority);
         System.out.println("│  Status:    Bypassing queue (CFP winner)");
