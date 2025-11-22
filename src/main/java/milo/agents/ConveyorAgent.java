@@ -857,7 +857,7 @@ public class ConveyorAgent extends Agent {
                 heartbeat.addReceiver(productionManager);
                 heartbeat.setProtocol("acknowledgement");
                 
-                String currentStatus = getProduced() ? "PRODUCING" : "IDLE";
+                String currentStatus = getProduced() ? "PRODUCING" : "IDLE"; // PRODUCING if a product is ready
                 heartbeat.setContent(
                     "(Heartbeat " +
                     ":agent-id \"" + getLocalName() + "\" " +

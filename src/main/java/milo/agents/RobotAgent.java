@@ -88,8 +88,8 @@ public class RobotAgent extends Agent {
         System.out.println("┌─ SET TARGET ───────────────────────────────────────");
         System.out.println("│  Old Target: '" + oldTarget + "'");
         System.out.println("│  New Target: '" + newTarget + "'");
-        System.out.println("│  Action: '" + action + "'");
-        System.out.println("│  Thread:     " + Thread.currentThread().getName());
+        System.out.println("│  Action:      " + action);
+        System.out.println("│  Thread:      " + Thread.currentThread().getName());
         System.out.println("└───────────────────────────────────────────────────");
         myRobot.setTarget(newTarget);
     }
@@ -588,17 +588,11 @@ public class RobotAgent extends Agent {
                 
                 // Verify target was actually written to OPC-UA
                 String verifiedTarget = robot.getTarget();
-                String verifiedNextLocation = robot.getNextLocation();
                 String verifiedLocation = robot.getLocation();
-                
                 boolean targetSetCorrectly = dropOffTarget.equals(verifiedTarget);
-                
                 System.out.println("│");
-                System.out.println("│  ✓ Verified Target:   '" + verifiedTarget + "'");
-                System.out.println("│  ✓ Verified NextLoc:  '" + verifiedNextLocation + "'");
-                System.out.println("│  ✓ Verified Location: '" + verifiedLocation + "'");
-                System.out.println("│  ✓ Target Set OK:     " + targetSetCorrectly);
-                System.out.println("│  Status:       " + (targetSetCorrectly ? "✅ Target written to OPC-UA" : "❌ TARGET NOT SET!"));
+                System.out.println("│  Target Set OK (✓): " + targetSetCorrectly);
+                System.out.println("│  Status:            " + (targetSetCorrectly ? "✅ Target written to OPC-UA" : "❌ TARGET NOT SET!"));
                 System.out.println("└──────────────────────────────────────────────────");
                 
                 if (!targetSetCorrectly) {
@@ -1900,18 +1894,22 @@ public class RobotAgent extends Agent {
                 heartbeat.addReceiver(productionManager);
                 heartbeat.setProtocol("acknowledgement");
                 
-                String currentStatus = myRobot != null && myRobot.isCarryingProduct() ? "BUSY" : "IDLE";
+                // Determine current status based on target and carrying state
+                boolean isIdle = myRobot == null || (myRobot.getTarget().isEmpty() || myRobot.getTarget().startsWith("Idle Location"));
+                String currentStatus = (isIdle && !myRobot.isCarryingProduct()) ? "IDLE" : "BUSY";
+
                 heartbeat.setContent(
                     "(Heartbeat " +
                     ":agent-id \"" + getLocalName() + "\" " +
                     ":status \"" + currentStatus + "\" " +
                     ":timestamp \"" + new java.util.Date() + "\" " +
                     ":robot-id \"" + robotId + "\" " +
-                    ":robot-priority \"" + myRobot.getPriority() + "\" " +
-                    ":robot-battery-level \"" + myRobot.getBatteryLevel() + "\" " +
-                    ":carried-product \"" + (myRobot != null ? myRobot.getCarriedProduct() : "NULL") + "\" " +
+                    ":priority \"" + (myRobot != null ? myRobot.getPriority() : "0") + "\" " +
+                    ":battery \"" + (myRobot != null ? myRobot.getBatteryLevel() : "0") + "\" " +
+                    ":carrying \"" + (myRobot != null && myRobot.isCarryingProduct()) + "\" " +
+                    ":product \"" + (myRobot != null ? myRobot.getCarriedProduct() : "NONE") + "\" " +
                     ":location \"" + (myRobot != null ? myRobot.getLocation() : "UNKNOWN") + "\" " +
-                    ":next-location \"" + (myRobot != null ? myRobot.getNextLocation() : "UNKNOWN") + "\")"
+                    ":target \"" + (myRobot != null ? myRobot.getTarget() : "NONE") + "\")"
                 );
                 
                 // SECURITY: Validate outgoing heartbeat with OPA policy
