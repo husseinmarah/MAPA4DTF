@@ -5,12 +5,14 @@ import jade.core.Agent;
 import jade.core.behaviours.CyclicBehaviour;
 import jade.core.behaviours.ParallelBehaviour;
 import jade.core.behaviours.TickerBehaviour;
+import jade.core.behaviours.WakerBehaviour;
 import jade.domain.FIPAAgentManagement.DFAgentDescription;
 import jade.domain.FIPAAgentManagement.ServiceDescription;
 import milo.opcua.server.CustomNamespace;
 import milo.federation.FederationHelper;
 import milo.security.FederationSecurityManager;
 import milo.security.FederationSecurityManager.SecurityContext;
+import milo.utils.DelayUtils;
 import org.eclipse.milo.opcua.sdk.server.nodes.UaVariableNode;
 import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue;
 import org.eclipse.milo.opcua.stack.core.types.builtin.Variant;
@@ -27,7 +29,7 @@ public class ConveyorAgent extends Agent {
     // =====================================================================
     // CONFIGURATION - Agent-specific
     // =====================================================================
-    private static final int AGENT_INTERVAL = 1000; // Fixed interval
+    private static final int AGENT_INTERVAL = 5500; // Fixed interval
     private UaVariableNode producedNode;
     private UaVariableNode enabledNode;
     private int conveyorId;
@@ -140,7 +142,7 @@ public class ConveyorAgent extends Agent {
         initializeEnabledNode();
         
         // Add small delay to ensure ProductionAgentManager is ready
-        addBehaviour(new jade.core.behaviours.WakerBehaviour(this, 2000) {
+        addBehaviour(new WakerBehaviour(this, 2000) {
             @Override
             protected void onWake() {
                 // Initialize federation capabilities
@@ -168,6 +170,7 @@ public class ConveyorAgent extends Agent {
         @Override
         public void onStart() {
             agentName = myAgent.getLocalName();
+            DelayUtils.randomDelay(10, 1000);
         }
 
         @Override
@@ -709,7 +712,10 @@ public class ConveyorAgent extends Agent {
         public ConveyorHeartbeatBehaviour(Agent agent, long period) {
             super(agent, period);
         }
-        
+        @Override
+        public void onStart() {
+            DelayUtils.randomDelay(10, 1000);
+        }
         @Override
         protected void onTick() {
             sendConveyorHeartbeat();
