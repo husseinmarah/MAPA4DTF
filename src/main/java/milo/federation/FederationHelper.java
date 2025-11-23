@@ -6,12 +6,10 @@ import jade.lang.acl.ACLMessage;
 import jade.domain.DFService;
 import jade.domain.FIPAException;
 import jade.domain.FIPAAgentManagement.*;
+import jade.lang.acl.MessageTemplate;
 import milo.utils.SL;
 
-import java.util.UUID;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.*;
 
 /**
  * Federation Helper for OPC UA Server Agents
@@ -23,7 +21,7 @@ import java.util.Iterator;
 public class FederationHelper {
 
     // Cache for agent FFAs to avoid repeated lookups
-    private static final java.util.Map<String, String> ffaCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<String, String> ffaCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * Update the local FFA cache for an agent
@@ -89,7 +87,7 @@ public class FederationHelper {
             // Send request and wait for response
             agent.send(request);
             ACLMessage response = agent.blockingReceive(
-                    jade.lang.acl.MessageTemplate.MatchConversationId(request.getConversationId()),
+                    MessageTemplate.MatchConversationId(request.getConversationId()),
                     10000 // 10 second timeout
             );
 
@@ -103,6 +101,7 @@ public class FederationHelper {
                         System.out.println("│  Agent: " + agent.getLocalName());
                         System.out.println("│  FFA:   " + ffa);
                         System.out.println("└──────────────────────────────────────────────────");
+                        FederationHelper.updateFFACache(agent.getLocalName(), ffa);
                         return ffa;
                     } else {
                         System.err.println("❌ FFA allocation failed - no FFA in response");
