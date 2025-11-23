@@ -190,7 +190,8 @@ public class RobotAgent extends Agent {
         addBehaviour(new PeerCoordinationBehaviour(this, 5000)); // Peer coordination every 3 seconds
         addBehaviour(new ProductNotificationHandler()); // Handle CFP from conveyors
         addBehaviour(new TaskResponseHandler()); // Handle ACCEPT/REJECT from conveyors
-        
+
+        // Register with Directory Facilitator so conveyors can find this agent
         // Register with ProductionAgentManager
         registerWithProductionManager();
     }
@@ -1249,6 +1250,7 @@ public class RobotAgent extends Agent {
             ServiceDescription sd = new ServiceDescription();
             sd.setType("MaterialHandling");
             sd.setName(getLocalName() + "-robot-service");
+            sd.addLanguages("ffa");
             dfd.addServices(sd);
             
             try {
@@ -1267,7 +1269,7 @@ public class RobotAgent extends Agent {
             DFAgentDescription[] results = DFService.search(this, template);
             
             if (results.length > 0) {
-                jade.core.AID productionManager = results[0].getName();
+                AID productionManager = results[0].getName();
                 
                 // Send registration message
                 ACLMessage registration = new ACLMessage(ACLMessage.INFORM);
@@ -1282,9 +1284,9 @@ public class RobotAgent extends Agent {
                 );
                 
                 send(registration);
-                System.out.println("[" + getLocalName() + "] Registration sent to ProductionAgentManager");
+                System.out.println("[" + getLocalName() + "] ✅ Registration sent to ProductionAgentManager");
             } else {
-                System.out.println("[" + getLocalName() + "] ProductionAgentManager not found in Directory Facilitator");
+                System.out.println("[" + getLocalName() + "] ❌ ProductionAgentManager not found in Directory Facilitator");
             }
             
         } catch (Exception e) {
@@ -1569,6 +1571,7 @@ public class RobotAgent extends Agent {
                 // Parse CFP
                 String conveyorName = extractValue(content, ":conveyor");
                 String location = extractValue(content, ":location");
+                String conveyorFFA = extractValue(content, ":ffa");
                 
                 System.out.println("┌─ CFP RECEIVED ───────────────────────────────────");
                 System.out.println("│  📩 CFP RECEIVED");
@@ -1576,6 +1579,7 @@ public class RobotAgent extends Agent {
                 System.out.println("│  From:        " + senderName);
                 System.out.println("│  To:          " + getLocalName());
                 System.out.println("│  Location:    " + location);
+                System.out.println("│  Conveyor FFA:" + conveyorFFA);
                 System.out.println("│  Conversation: " + msg.getConversationId());
                 System.out.println("└──────────────────────────────────────────────────");
                 
@@ -1635,7 +1639,8 @@ public class RobotAgent extends Agent {
                     "(Proposal :robot \"" + getLocalName() + "\" " +
                     ":priority " + priority + " " +
                     ":distance " + distance + " " + // Distance is still sent for tie-breaking
-                    ":available true)"
+                    ":available true " +
+                    ":ffa \"" + (myFFA != null ? myFFA : "NONE") + "\")" // Add robot's FFA
                 );
                 
                 // sending the proposal
@@ -1656,6 +1661,7 @@ public class RobotAgent extends Agent {
                 System.out.println("│  Priority:    " + priority);
                 System.out.println("│  Distance:    " + String.format("%.2f", distance));
                 System.out.println("│  Effective Priority (with bonus): " + effectivePriority);
+                System.out.println("│  My FFA:      " + (myFFA != null ? myFFA : "NONE"));
                 System.out.println("└──────────────────────────────────────────────────");
                 
             } catch (Exception e) {
