@@ -78,7 +78,7 @@ public class FederationHelper {
                             ":geo \"EU\" " +
                             ":domain \"Manufacturing\" " +
                             ":level \"Production\" " +
-                            ":system \"OpcUA\" " +
+                            ":system \"Chemical\" " +
                             ":component \"%s\" " +
                             ":capability \"%s\" " +
                             ":qos \"Standard\")",
