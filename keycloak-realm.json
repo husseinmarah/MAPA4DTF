@@ -122,7 +122,7 @@
         "org": ["Stakeholder2_RobotContainer"],
         "role": ["worker"],
         "trustScore": ["0.9"],
-        "status": ["active"]
+        "status": ["blocked"]
       }
     },
     {

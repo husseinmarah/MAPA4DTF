@@ -1,0 +1,25 @@
+{
+  "component_roles": {
+    "ProductionManager": "manager",
+    "FederationAgentManager": "manager",
+    "Robot": "worker",
+    "Conveyor": "worker"
+  },
+  "federation_rules": [
+    {
+      "source": "manager",
+      "target": "worker",
+      "type": "Vertical (Hierarchical)"
+    },
+    {
+      "source": "worker",
+      "target": "manager",
+      "type": "Vertical (Hierarchical)"
+    },
+    {
+      "source": "worker",
+      "target": "worker",
+      "type": "Horizontal (Collaboration)"
+    }
+  ]
+}
