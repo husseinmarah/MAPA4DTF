@@ -3,6 +3,7 @@ package milo.security;
 import jade.lang.acl.ACLMessage;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import milo.federation.FederationHelper;
 
 /**
  * Federation Security Manager for policy enforcement and IP protection
@@ -87,10 +88,8 @@ public class FederationSecurityManager {
      */
     private FederationSecurityManager() {
         System.out.println("┌─ SECURITY SYSTEM INITIALIZATION ─────────────────");
-        
         validator = new SecurityValidator();
         config = new SecurityConfiguration();
-        
         // Initialize OPA client
         opaClient = new OPAClient();
         opaEnabled = opaClient.isAvailable();
@@ -111,8 +110,7 @@ public class FederationSecurityManager {
         
         initializeCompanyPolicies();
         System.out.println("│  ✓ Company policies loaded");
-        System.out.println("│");
-        System.out.println("│  ✅ Security Manager Ready");
+        System.out.println("│  ✓ Security Manager Ready");
         System.out.println("└──────────────────────────────────────────────────");
     }
     
@@ -535,12 +533,18 @@ public class FederationSecurityManager {
             // Get security contexts
             SecurityContext sourceContext = agentContexts.get(sourceAgent);
             SecurityContext targetContext = agentContexts.get(targetAgent);
+
+            // NEW: Get FFAs for policy evaluation
+            String sourceFFA = FederationHelper.getAgentFFA(sourceAgent);
+            String targetFFA = FederationHelper.getAgentFFA(targetAgent);
             
             if (sourceContext == null || targetContext == null) {
                 System.err.println("⚠️ Missing security context for OPA evaluation");
                 return false; // Deny if context is missing
             }
             
+            
+
             // Get user attributes from Keycloak token if available
             double sourceTrustScore = 0.5;
             String sourceRole = "worker";
@@ -573,6 +577,7 @@ public class FederationSecurityManager {
             // Print detailed OPA policy evaluation box
             System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
             System.out.println("│  " + (decision.allowed ? "✅ ALLOWED" : "❌ DENIED"));
+            System.out.println("│  --- SOURCE ---");
             System.out.println("│  Time:        " + java.time.Instant.now());
             System.out.println("│  From:        " + sourceAgent + " (" + sourceContext.companyId + ")");
             System.out.println("│  To:          " + targetAgent + " (" + targetContext.companyId + ")");
@@ -580,6 +585,9 @@ public class FederationSecurityManager {
             System.out.println("│  Role:        " + sourceRole);
             System.out.println("│  Trust Score: " + sourceTrustScore);
             System.out.println("│  Status:      " + sourceStatus);
+            System.out.println("│  Source FFA:  " + sourceFFA);
+            System.out.println("│  --- TARGET ---");
+            System.out.println("│  Target FFA:  " + targetFFA);
             System.out.println("│  Reason:      " + decision.reason);
             System.out.println("└──────────────────────────────────────────────────");
             
