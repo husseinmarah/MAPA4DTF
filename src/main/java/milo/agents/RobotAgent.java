@@ -1552,7 +1552,6 @@ public class RobotAgent extends Agent {
         
         private void handleProductNotification(ACLMessage msg) {
             try {
-                System.out.println("SENDING PROPOSAL FROM " + getLocalName());
                 String senderName = msg.getSender().getLocalName();
                 String content = msg.getContent();
                 
@@ -1575,11 +1574,11 @@ public class RobotAgent extends Agent {
                 
                 System.out.println("┌─ CFP RECEIVED ───────────────────────────────────");
                 System.out.println("│  📩 CFP RECEIVED");
-                System.out.println("│  Time:        " + java.time.Instant.now());
-                System.out.println("│  From:        " + senderName);
-                System.out.println("│  To:          " + getLocalName());
-                System.out.println("│  Location:    " + location);
-                System.out.println("│  Conveyor FFA:" + conveyorFFA);
+                System.out.println("│  Time:         " + java.time.Instant.now());
+                System.out.println("│  From:         " + senderName);
+                System.out.println("│  To:           " + getLocalName());
+                System.out.println("│  Location:     " + location);
+                System.out.println("│  Conveyor FFA: " + conveyorFFA);
                 System.out.println("│  Conversation: " + msg.getConversationId());
                 System.out.println("└──────────────────────────────────────────────────");
                 
@@ -1600,11 +1599,11 @@ public class RobotAgent extends Agent {
 
                 System.out.println("📊 " + getLocalName() + " - Availability check:");
                 System.out.println("┌─ AVAILABILITY CHECK ─────────────────────────────");
-                System.out.println("   Target: '" + myRobot.getTarget() + "'");
-                System.out.println("   hasNoTarget: " + hasNoTarget);
-                System.out.println("   returningToIdle: " + returningToIdle);
-                System.out.println("   carrying: " + isCarrying);
-                System.out.println("   available: " + isAvailable);
+                System.out.println("│  Target: '" + myRobot.getTarget() + "'");
+                System.out.println("│  hasNoTarget: " + hasNoTarget);
+                System.out.println("│  returningToIdle: " + returningToIdle);
+                System.out.println("│  carrying: " + isCarrying);
+                System.out.println("│  available: " + isAvailable);
                 System.out.println("└──────────────────────────────────────────────────");
 
 
@@ -1621,8 +1620,7 @@ public class RobotAgent extends Agent {
                     return;
                 }
                 
-                System.out.println("✅ " + getLocalName() + " - Robot Preparing a Proposal...");
-                
+                System.out.println("✉️ " + getLocalName() + " - Sending Proposal for: " + msg.getSender().getLocalName());
                 // Calculate distance to conveyor
                 double distance = calculateDistanceToTarget(location);
                 int priority = myRobot.getPriority();
