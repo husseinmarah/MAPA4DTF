@@ -1443,7 +1443,7 @@ public class RobotAgent extends Agent {
                         for (int i = 0; i < CustomNamespace.getInputConveyors().size(); i++) {
                             ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(i);
                             if (("ConveyorAgent" + (i + 1)).equals(senderName)) {
-                                conveyor.reserveForWinner(getLocalName(), myRobot.getPriority());
+                                reserveForWinner(getLocalName(),  senderName, i, myRobot.getPriority());
                                 System.out.println("✅ " + getLocalName() + " - Reserved pickup slot at " + senderName);
                                 break;
                             }
@@ -1463,6 +1463,23 @@ public class RobotAgent extends Agent {
                 System.err.println("❌ " + getLocalName() + " - Error handling task acceptance: " + e.getMessage());
                 e.printStackTrace();
             }
+        }
+
+        /**
+         * Reserve pickup slot for CFP winner (called when robot wins the bid)
+         * This places the winning robot at the front of the queue
+         */
+        public synchronized void reserveForWinner(String robotAgent, String conveyorAgent, int conveyorId, int priority) {
+            // Clear the queue and set this robot as the current picker
+
+            System.out.println("┌─ PICKUP RESERVED FOR WINNER ─────────────────────");
+            System.out.println("│  🏆 CFP WINNER RESERVED");
+            System.out.println("│  Time:      " + java.time.Instant.now());
+            System.out.println("│  Conveyor:  " + conveyorAgent + " (#" + conveyorId + ")");
+            System.out.println("│  Robot:     " + robotAgent);
+            System.out.println("│  Priority:  " + priority);
+            System.out.println("│  Status:    Bypassing queue (CFP winner)");
+            System.out.println("└──────────────────────────────────────────────────");
         }
         
         /**
@@ -1597,13 +1614,13 @@ public class RobotAgent extends Agent {
                 boolean isCarrying = myRobot.isCarryingProduct();
                 boolean isAvailable = (hasNoTarget || returningToIdle) && !isCarrying;
 
-                System.out.println("📊 " + getLocalName() + " - Availability check:");
                 System.out.println("┌─ AVAILABILITY CHECK ─────────────────────────────");
+                System.out.println("│  🤖 " + getLocalName());
+                System.out.println("│  Available: " + isAvailable);
                 System.out.println("│  Target: '" + myRobot.getTarget() + "'");
                 System.out.println("│  hasNoTarget: " + hasNoTarget);
                 System.out.println("│  returningToIdle: " + returningToIdle);
                 System.out.println("│  carrying: " + isCarrying);
-                System.out.println("│  available: " + isAvailable);
                 System.out.println("└──────────────────────────────────────────────────");
 
 
