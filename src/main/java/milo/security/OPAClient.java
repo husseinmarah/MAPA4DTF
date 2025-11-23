@@ -1,8 +1,10 @@
 package milo.security;
 
+import milo.federation.FederationHelper;
 import okhttp3.*;
 import org.json.JSONObject;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -96,7 +98,7 @@ public class OPAClient {
                     System.err.println("│  ⚠️ SERVICE ERROR - HTTP " + response.code());
                     System.err.println("│  From: " + senderName + " (" + senderOrg + ")");
                     System.err.println("│  To:   " + receiverName + " (" + receiverOrg + ")");
-                    System.out.println("│  Time:        " + java.time.Instant.now().toString());
+                    System.out.println("│  Time:        " + Instant.now().toString());
                     System.err.println("└──────────────────────────────────────────────────");
                     return new PolicyDecision(false, "OPA service error", null);
                 }
@@ -109,27 +111,22 @@ public class OPAClient {
                 String reason = allowed ? 
                     "OPA policy allows communication" : 
                     "OPA policy denies communication";
-                
-                if (allowed) {
-                    System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
-                    System.out.println("│  ✅ ALLOWED");
-                    System.out.println("│  Time:        " + java.time.Instant.now().toString());
-                    System.out.println("│  From:        " + senderName + " (" + senderOrg + ")");
-                    System.out.println("│  To:          " + receiverName + " (" + receiverOrg + ")");
-                    System.out.println("│  Role:        " + senderRole);
-                    System.out.println("│  Trust Score: " + senderTrustScore);
-                    System.out.println("└──────────────────────────────────────────────────");
-                } else {
-                    System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
-                    System.out.println("│  ❌ DENIED");
-                    System.out.println("│  Time:        " + java.time.Instant.now().toString());
-                    System.out.println("│  From:        " + senderName + " (" + senderOrg + ")");
-                    System.out.println("│  To:          " + receiverName + " (" + receiverOrg + ")");
-                    System.out.println("│  Role:        " + senderRole);
-                    System.out.println("│  Trust Score: " + senderTrustScore);
-                    System.out.println("│  Reason:      " + reason);
-                    System.out.println("└──────────────────────────────────────────────────");
-                }
+
+
+                // Print detailed OPA policy evaluation box
+                System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
+                System.out.println("│  " + (allowed ? "✅ ALLOWED" : "❌ DENIED"));
+                System.out.println("│  --- SOURCE ---");
+                System.out.println("│  Time:        " + Instant.now());
+                System.out.println("│  From:        " + senderName + " (" + senderOrg + ")");
+                System.out.println("│  To:          " + receiverName + " (" + receiverOrg + ")");
+                System.out.println("│  Role:        " + senderRole);
+                System.out.println("│  Trust Score: " + senderTrustScore);
+                System.out.println("│  Source FFA:  " + FederationHelper.getAgentFFA(senderName));
+                System.out.println("│  --- TARGET ---");
+                System.out.println("│  Target FFA:  " + FederationHelper.getAgentFFA(receiverName));
+                System.out.println("│  Reason: " + reason);
+                System.out.println("└──────────────────────────────────────────────────");
                 
                 return new PolicyDecision(allowed, reason, requestBody.toString());
             }
