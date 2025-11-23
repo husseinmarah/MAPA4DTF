@@ -20,6 +20,8 @@ import org.eclipse.milo.opcua.stack.core.types.builtin.Variant;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 
+import java.util.Iterator;
+
 /**
  * Template-configurable Conveyor Agent with Federation Support
  * Each agent instance manages a specific conveyor based on its ID
@@ -408,15 +410,8 @@ public class ConveyorAgent extends Agent {
                 System.out.println("📡 " + getLocalName() + " - Found " + robotResults.length + " robots via DF");
                 
                 for (DFAgentDescription result : robotResults) {
-                    jade.core.AID robotAID = result.getName();
+                    AID robotAID = result.getName();
                     String robotAgentName = robotAID.getLocalName();
-                    
-                    System.out.println("🔍 " + getLocalName() + " - Examining robot from DF: " + robotAgentName);
-                    System.out.println("   Robot AID: " + robotAID.getName());
-                    java.util.Iterator<?> addressIterator = robotAID.getAllAddresses();
-                    while (addressIterator.hasNext()) {
-                        System.out.println("      Address: " + addressIterator.next());
-                    }
 
                     // OPA CHECK: Can this conveyor communicate with the robot?
                     if (securityManager != null && securityManager.canCommunicateWith(getLocalName(), robotAgentName)) {
@@ -446,11 +441,11 @@ public class ConveyorAgent extends Agent {
             // Only send if there are authorized receivers
             if (authorizedRobots > 0) {
                 String content = String.format(
-                    "(PickupTaskCFP :conveyor \"%s\" :conveyorId %d :location \"%s\" :time \"%s\")",
+                    "(PickupTaskCFP :conveyor \"%s\" :conveyorId %d :location \"%s\" :time \"%s\" :ffa \"%s\")",
                     getLocalName(),
                     conveyorId,
                     "InputConveyor #" + conveyorId,
-                    java.time.Instant.now()
+                    java.time.Instant.now(), myFFA
                 );
                 
                 cfp.setContent(content);
