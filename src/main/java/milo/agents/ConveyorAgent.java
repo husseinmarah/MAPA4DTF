@@ -1250,24 +1250,7 @@ public class ConveyorAgent extends Agent {
             return Long.compare(this.arrivalTime, other.arrivalTime);
         }
     }
-    
-    /**
-     * Reserve pickup slot for CFP winner (called when robot wins the bid)
-     * This places the winning robot at the front of the queue
-     */
-    public synchronized void reserveForWinner(String robotAgent, int priority) {
-        // Clear the queue and set this robot as the current picker
-        currentPickingRobot = robotAgent;
-        
-        System.out.println("┌─ PICKUP RESERVED FOR WINNER ─────────────────────");
-        System.out.println("│  🏆 CFP WINNER RESERVED");
-        System.out.println("│  Time:      " + java.time.Instant.now());
-        System.out.println("│  Conveyor:  " + agentName + " (#" + conveyorId + ")");
-        System.out.println("│  Robot:     " + robotAgent);
-        System.out.println("│  Priority:  " + priority);
-        System.out.println("│  Status:    Bypassing queue (CFP winner)");
-        System.out.println("└──────────────────────────────────────────────────");
-    }
+
     
     /**
      * Register robot in pickup queue when it arrives at conveyor
