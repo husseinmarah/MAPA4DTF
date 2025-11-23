@@ -6,6 +6,7 @@ import jade.core.behaviours.CyclicBehaviour;
 import jade.core.behaviours.ParallelBehaviour;
 import jade.core.behaviours.TickerBehaviour;
 import jade.core.behaviours.WakerBehaviour;
+import jade.domain.DFService;
 import jade.domain.FIPAAgentManagement.DFAgentDescription;
 import jade.domain.FIPAAgentManagement.ServiceDescription;
 import milo.opcua.server.CustomNamespace;
@@ -157,7 +158,8 @@ public class ConveyorAgent extends Agent {
         parallelBehaviour.addSubBehaviour(new ConveyorHeartbeatBehaviour(this, 10000)); // Send heartbeat every 10 seconds
         parallelBehaviour.addSubBehaviour(new RobotExitNotificationHandler()); // Handle robot exit notifications
         addBehaviour(parallelBehaviour);
-        
+
+        // Register with Directory Facilitator so other agents can find this conveyor
         // Register with ProductionAgentManager
         registerWithProductionManager();
     }
@@ -593,19 +595,34 @@ public class ConveyorAgent extends Agent {
      */
     private void registerWithProductionManager() {
         try {
-            System.out.println("[" + getLocalName() + "] Registering with ProductionAgentManager...");
-            
-            // Find ProductionAgentManager through Directory Facilitator
-            DFAgentDescription template = new DFAgentDescription();
+            System.out.println("[" + getLocalName() + "] Registering with Directory Facilitator and ProductionAgentManager...");
+
+            // STEP 1: Register this conveyor with Directory Facilitator so RobotAgents can find it
+            DFAgentDescription dfd = new DFAgentDescription();
+            dfd.setName(getAID());
             ServiceDescription sd = new ServiceDescription();
-            sd.setType("ManufacturingCoordination");
-            template.addServices(sd);
-            
-            DFAgentDescription[] results = jade.domain.DFService.search(this, template);
-            
+            sd.setType("ConveyorService"); // Service for providing products
+            sd.setName(getLocalName() + "-conveyor-service");
+            sd.addLanguages("ffa");
+            dfd.addServices(sd);
+            try {
+                DFService.register(this, dfd);
+                System.out.println("✅ " + getLocalName() + " registered 'ConveyorService' with DF.");
+            } catch (Exception e) {
+                System.err.println("❌ " + getLocalName() + " DF registration failed: " + e.getMessage());
+            }
+
+            // STEP 2: Find ProductionAgentManager through Directory Facilitator
+            DFAgentDescription template = new DFAgentDescription();
+            ServiceDescription sdSearch = new ServiceDescription();
+            sdSearch.setType("ManufacturingCoordination");
+            template.addServices(sdSearch);
+
+            DFAgentDescription[] results = DFService.search(this, template);
+
             if (results.length > 0) {
-                jade.core.AID productionManager = results[0].getName();
-                
+                AID productionManager = results[0].getName();
+
                 // Send registration message
                 ACLMessage registration = new ACLMessage(ACLMessage.INFORM);
                 registration.addReceiver(productionManager);
@@ -641,7 +658,7 @@ public class ConveyorAgent extends Agent {
             return "MaterialTransport.Output";
         }
     }
-    
+
     /**
      * Conveyor Production Command Handler - Handles production commands from ProductionAgentManager
      */
