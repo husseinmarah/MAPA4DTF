@@ -944,10 +944,6 @@ public class ProductionAgentManager extends Agent {
                 System.out.println("📊 [" + myAgent.getLocalName() + "] Agent Idle Capacity: " +
                         String.format("%.1f%% (%d/%d agents idle)", idlePercentage, idleAgents, onlineAgents));
 
-                // If too many agents are idle, could trigger new production tasks
-                if (idlePercentage > 80 && activeTasks.size() < 3) {
-                    System.out.println("[" + myAgent.getLocalName() + "] 🚀 High idle capacity - Consider new production tasks");
-                }
             }
         }
 
