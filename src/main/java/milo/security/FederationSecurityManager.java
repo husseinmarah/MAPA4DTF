@@ -1,6 +1,8 @@
 package milo.security;
 
 import jade.lang.acl.ACLMessage;
+
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import milo.federation.FederationHelper;
@@ -534,7 +536,7 @@ public class FederationSecurityManager {
             SecurityContext sourceContext = agentContexts.get(sourceAgent);
             SecurityContext targetContext = agentContexts.get(targetAgent);
 
-            // NEW: Get FFAs for policy evaluation
+            // Get FFAs for policy evaluation
             String sourceFFA = FederationHelper.getAgentFFA(sourceAgent);
             String targetFFA = FederationHelper.getAgentFFA(targetAgent);
             
@@ -542,7 +544,6 @@ public class FederationSecurityManager {
                 System.err.println("⚠️ Missing security context for OPA evaluation");
                 return false; // Deny if context is missing
             }
-            
             
 
             // Get user attributes from Keycloak token if available
@@ -574,22 +575,22 @@ public class FederationSecurityManager {
                 targetAgent, targetContext.companyId, targetRole, targetTrustScore, targetStatus, "send"
             );
             
-            // Print detailed OPA policy evaluation box
-            System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
-            System.out.println("│  " + (decision.allowed ? "✅ ALLOWED" : "❌ DENIED"));
-            System.out.println("│  --- SOURCE ---");
-            System.out.println("│  Time:        " + java.time.Instant.now());
-            System.out.println("│  From:        " + sourceAgent + " (" + sourceContext.companyId + ")");
-            System.out.println("│  To:          " + targetAgent + " (" + targetContext.companyId + ")");
-            System.out.println("│  Action:      send (message communication)");
-            System.out.println("│  Role:        " + sourceRole);
-            System.out.println("│  Trust Score: " + sourceTrustScore);
-            System.out.println("│  Status:      " + sourceStatus);
-            System.out.println("│  Source FFA:  " + sourceFFA);
-            System.out.println("│  --- TARGET ---");
-            System.out.println("│  Target FFA:  " + targetFFA);
-            System.out.println("│  Reason:      " + decision.reason);
-            System.out.println("└──────────────────────────────────────────────────");
+//            // Print detailed OPA policy evaluation box
+//            System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
+//            System.out.println("│  " + (decision.allowed ? "✅ ALLOWED" : "❌ DENIED"));
+//            System.out.println("│  --- SOURCE ---");
+//            System.out.println("│  Time:        " + Instant.now());
+//            System.out.println("│  From:        " + sourceAgent + " (" + sourceContext.companyId + ")");
+//            System.out.println("│  To:          " + targetAgent + " (" + targetContext.companyId + ")");
+//            System.out.println("│  Action:      send (message communication)");
+//            System.out.println("│  Role:        " + sourceRole);
+//            System.out.println("│  Trust Score: " + sourceTrustScore);
+//            System.out.println("│  Status:      " + sourceStatus);
+//            System.out.println("│  Source FFA:  " + sourceFFA);
+//            System.out.println("│  --- TARGET ---");
+//            System.out.println("│  Target FFA:  " + targetFFA);
+//            System.out.println("│  Reason:      " + decision.reason);
+//            System.out.println("└──────────────────────────────────────────────────");
             
             if (!decision.allowed) {
                 logSecurityEvent("OPA_DENIED", sourceAgent + " -> " + targetAgent + " (" + decision.reason + ")");
