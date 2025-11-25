@@ -285,6 +285,79 @@ public class OPAClient {
     }
     
     /**
+     * Evaluate trust score update policy.
+     *
+     * @param currentScore The agent's current trust score.
+     * @param outcome      The outcome of the last interaction (e.g., "SUCCESS", "FAILURE").
+     * @param decayFactor  The factor by which the old score decays.
+     * @param learningRate The rate at which the new outcome influences the score.
+     * @return The newly calculated trust score. Returns the current score on failure.
+     */
+    public double evaluateTrustScoreUpdate(double currentScore, String outcome, double decayFactor, double learningRate) {
+        String trustOpaUrl = opaUrl.replace("/allow", "/evaluate_trust");
+
+        try {
+            JSONObject trustData = new JSONObject();
+            trustData.put("current_score", currentScore);
+            trustData.put("outcome", outcome);
+
+            JSONObject trustParams = new JSONObject();
+            trustParams.put("decay_factor", decayFactor);
+            trustParams.put("learning_rate", learningRate);
+
+            JSONObject input = new JSONObject();
+            input.put("trust_data", trustData);
+            input.put("trust_params", trustParams);
+
+            JSONObject requestBody = new JSONObject();
+            requestBody.put("input", input);
+
+            RequestBody body = RequestBody.create(
+                requestBody.toString(),
+                MediaType.parse("application/json")
+            );
+
+            Request request = new Request.Builder()
+                    .url(trustOpaUrl)
+                    .post(body)
+                    .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    System.err.println("OPA trust evaluation failed with HTTP code: " + response.code());
+                    return currentScore; // Return original score on failure
+                }
+
+                String responseBody = response.body().string();
+                
+                JSONParser parser = new JSONParser();
+                JSONObject jsonResponse = (JSONObject) parser.parse(responseBody);
+
+                if (jsonResponse.containsKey("result")) {
+                    Object result = jsonResponse.get("result");
+                    if (result instanceof Double) {
+                        return (Double) result;
+                    } else if (result instanceof Long) {
+                        return ((Long) result).doubleValue();
+                    } else if (result instanceof String) {
+                        return Double.parseDouble((String) result);
+                    }
+                }
+                
+                System.err.println("OPA trust evaluation response did not contain a valid 'result' field.");
+                return currentScore;
+
+            }
+        } catch (IOException | ParseException e) {
+            System.err.println("Exception during OPA trust evaluation: " + e.getMessage());
+            return currentScore; // Return original score on failure
+        } catch (Exception e) {
+            System.err.println("Unexpected error during OPA trust evaluation: " + e.getMessage());
+            return currentScore; // Return original score on failure
+        }
+    }
+
+    /**
      * Check if OPA service is available
      * 
      * @return true if OPA is reachable

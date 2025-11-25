@@ -1,5 +1,6 @@
 package milo.agents;
 
+import jade.core.AID;
 import milo.federation.FAPProtocol;
 import milo.federation.FederatedDirectoryService;
 import milo.federation.FederationWorkflowOrchestrator;
@@ -22,7 +23,7 @@ import java.util.List;
  * Implements FAP-ALLOC, FAP-RESOLVE, FAP-UPDATE (lease) using FIPA-Request
  * Enhanced with federation policy enforcement using JADE's DF and AMS infrastructure
  */
-public class FederationAgentManager extends Agent {
+public class FederationManagerAgent extends Agent {
 
     private FAPProtocol fapProtocol;
     private FederatedDirectoryService federatedDirectory;
@@ -45,6 +46,13 @@ public class FederationAgentManager extends Agent {
             System.err.println("│  Using local authentication");
             System.err.println("└──────────────────────────────────────────────────");
             securityManager.registerSecureAgent(getLocalName(), "main", "Main-Container");
+        } else {
+            // Link JADE agent name to Keycloak identity
+            securityManager.linkAgentToContext(getLocalName(), "FederationAgentManager");
+
+            // NEW: Get trust score and report to TrustManager
+            double initialTrustScore = securityManager.getAgentTrustScore("FederationAgentManager");
+            reportInitialTrustScore(initialTrustScore);
         }
         
         // STEP 2: Initialize federation components
@@ -570,5 +578,36 @@ public class FederationAgentManager extends Agent {
         reply.setPerformative(ACLMessage.REFUSE);
         reply.setContent("(PolicyViolation :reason \"" + reason + "\" :contact \"federation-admin\")");
         send(reply);
+    }
+
+    /**
+     * Sends the initial trust score to the TrustManagerAgent.
+     * @param score The initial trust score.
+     */
+    private void reportInitialTrustScore(double score) {
+        try {
+            // Find TrustManagerAgent through Directory Facilitator
+            DFAgentDescription template = new DFAgentDescription();
+            ServiceDescription sd = new ServiceDescription();
+            sd.setType("TrustManagement");
+            template.addServices(sd);
+
+            DFAgentDescription[] results = DFService.search(this, template);
+
+            if (results.length > 0) {
+                AID trustManager = results[0].getName();
+
+                ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
+                msg.addReceiver(trustManager);
+                msg.setProtocol("initial-trust-score");
+                msg.setContent("(:agent-id \"" + getLocalName() + "\" :score " + score + ")");
+                send(msg);
+                System.out.println("📈 " + getLocalName() + " - Reported initial trust score: " + score +", Receiver: " + trustManager);
+            } else {
+                System.err.println("⚠️ " + getLocalName() + " - TrustManagerAgent not found in DF. Cannot report initial trust score.");
+            }
+        } catch (Exception e) {
+            System.err.println("❌ " + getAID().getLocalName() + " - Error reporting initial trust score: " + e.getMessage());
+        }
     }
 }

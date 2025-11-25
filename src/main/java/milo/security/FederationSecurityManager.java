@@ -721,6 +721,21 @@ public class FederationSecurityManager {
         return status;
     }
 
+    /**
+     * Get trust score for an agent from its token.
+     * @param agentName The name of the agent.
+     * @return The trust score, or a default value if not found.
+     */
+    public double getAgentTrustScore(String agentName) {
+        KeycloakClient.AuthToken token = agentTokens.get(agentName);
+        if (token != null && !token.isExpired()) {
+            return token.userAttributes.trustScore;
+        }
+        // Log a warning if the token is not found, as it should be present after authentication.
+        System.err.println("⚠️ Could not retrieve trust score for " + agentName + ". Token not found or is expired.");
+        return 0.5; // Default fallback score
+    }
+
     // ========== Private Helper Methods ==========
 
     /**

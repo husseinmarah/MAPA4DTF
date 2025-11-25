@@ -139,6 +139,10 @@ public class ConveyorAgent extends Agent {
         } else {
             // Link the agent's local name to the authenticated context
             securityManager.linkAgentToContext(getLocalName(), keycloakUsername);
+
+            // NEW: Get trust score and report to TrustManager
+            double initialTrustScore = securityManager.getAgentTrustScore(keycloakUsername);
+            reportInitialTrustScore(initialTrustScore);
         }
         
         // Initialize the enabled node with default value (false)
@@ -159,6 +163,7 @@ public class ConveyorAgent extends Agent {
         parallelBehaviour.addSubBehaviour(new ConveyorProductionCommandHandler()); // Handle production commands
         parallelBehaviour.addSubBehaviour(new ConveyorHeartbeatBehaviour(this, 10000)); // Send heartbeat every 10 seconds
         parallelBehaviour.addSubBehaviour(new RobotExitNotificationHandler()); // Handle robot exit notifications
+        parallelBehaviour.addSubBehaviour(new PickupCompletionHandler()); // Handle pickup completion requests
         addBehaviour(parallelBehaviour);
 
         // Register with Directory Facilitator so other agents can find this conveyor
@@ -474,6 +479,77 @@ public class ConveyorAgent extends Agent {
             taskAssignmentInProgress = false;
         }
     }
+
+    /**
+     * Sends a trust update message to the TrustManagerAgent.
+     * @param outcome The outcome of the task, e.g., "SUCCESS" or "FAILURE".
+     */
+    private void sendTrustUpdate(String outcome) {
+        try {
+            // Find TrustManagerAgent through Directory Facilitator
+            DFAgentDescription template = new DFAgentDescription();
+            ServiceDescription sd = new ServiceDescription();
+            sd.setType("TrustManagement");
+            template.addServices(sd);
+
+            System.out.println("Searching for TrustManagerAgent...");
+            DFAgentDescription[] results = DFService.search(this, template);
+            System.out.println("Found " + results.length + " results.");
+
+            if (results.length > 0) {
+                System.out.println("TrustManagerAgent found: " + results[0].getName());
+                AID trustManager = results[0].getName();
+
+                if (trustManager == null) {
+                    System.err.println("ERROR: TrustManager AID is null after getting it from DF");
+                    return;
+                }
+
+                ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
+                msg.addReceiver(trustManager);
+                msg.setProtocol("trust-update");
+                msg.setContent("(:agent-id \"" + getLocalName() + "\" :outcome \"" + outcome + "\")");
+                send(msg);
+                System.out.println("📈 " + getLocalName() + " - Sent trust update: " + outcome);
+            } else {
+                System.err.println("⚠️ " + getLocalName() + " - TrustManagerAgent not found in DF.");
+            }
+        } catch (Exception e) {
+            System.err.println("❌ " + getAID().getLocalName() + " - Error sending trust update: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Sends the initial trust score to the TrustManagerAgent.
+     * @param score The initial trust score.
+     */
+    private void reportInitialTrustScore(double score) {
+        try {
+            // Find TrustManagerAgent through Directory Facilitator
+            DFAgentDescription template = new DFAgentDescription();
+            ServiceDescription sd = new ServiceDescription();
+            sd.setType("TrustManagement");
+            template.addServices(sd);
+
+            DFAgentDescription[] results = DFService.search(this, template);
+
+            if (results.length > 0) {
+                AID trustManager = results[0].getName();
+
+                ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
+                msg.addReceiver(trustManager);
+                msg.setProtocol("initial-trust-score");
+                msg.setContent("(:agent-id \"" + getLocalName() + "\" :score " + score + ")");
+                send(msg);
+                System.out.println("📈 " + getLocalName() + " - Reported initial trust score: " + score +", Receiver: " + trustManager);
+            } else {
+                System.err.println("⚠️ " + getLocalName() + " - TrustManagerAgent not found in DF. Cannot report initial trust score.");
+            }
+        } catch (Exception e) {
+            System.err.println("❌ " + getAID().getLocalName() + " - Error reporting initial trust score: " + e.getMessage());
+        }
+    }
     
     // =====================================================================
     // GETTERS - Clean interface
@@ -509,9 +585,11 @@ public class ConveyorAgent extends Agent {
                 System.out.println("┌─ CONVEYOR STATUS UPDATE ─────────────────────────");
                 System.out.println("│  🏭 PRODUCT PICKED UP");
                 System.out.println("│  Time:     " + java.time.Instant.now());
-                System.out.println("│  Conveyor: " + getLocalName() + " (#" + conveyorId + ")");
+                System.out.println("│  Conveyor: " + agentName + " (#" + conveyorId + ")");
                 System.out.println("│  Status:   Produced → false");
                 System.out.println("└──────────────────────────────────────────────────");
+                // Report SUCCESS to TrustManagerAgent
+                sendTrustUpdate("SUCCESS");
             }
         } catch (Exception e) {
             System.err.println("❌ Error setting produced value for conveyor " + conveyorId + ": " + e.getMessage());
@@ -1054,6 +1132,7 @@ public class ConveyorAgent extends Agent {
             try {
                 if (proposals.isEmpty()) {
                     System.out.println("⚠️ " + getLocalName() + " - No proposals received for pickup task");
+                    sendTrustUpdate("FAILURE"); // Report FAILURE
                     taskAssignmentInProgress = false;
                     done = true;
                     return;
@@ -1283,7 +1362,7 @@ public class ConveyorAgent extends Agent {
         System.out.println("┌─ PICKUP QUEUE UPDATE ────────────────────────────");
         System.out.println("│  📋 ROBOT REGISTERED");
         System.out.println("│  Time:      " + java.time.Instant.now());
-        System.out.println("│  Conveyor:  " + getLocalName() + " (#" + conveyorId + ")");
+        System.out.println("│  Conveyor:  " + agentName + " (#" + conveyorId + ")");
         System.out.println("│  Robot:     " + robotAgent);
         System.out.println("│  Priority:  " + priority);
         System.out.println("│  Position:  " + (sortedQueue.indexOf(entry) + 1) + " of " + pickupQueue.size());
@@ -1326,7 +1405,7 @@ public class ConveyorAgent extends Agent {
         if (robotAgent.equals(currentPickingRobot)) {
             currentPickingRobot = null;
             
-            System.out.println("✅ " + getLocalName() + " - " + robotAgent + " completed pickup");
+            System.out.println("✅ " + agentName + " - " + robotAgent + " completed pickup");
             
             // Process next robot in queue
             processPickupQueue();
@@ -1340,7 +1419,7 @@ public class ConveyorAgent extends Agent {
         if (currentPickingRobot == null && !pickupQueue.isEmpty()) {
             RobotQueueEntry next = pickupQueue.peek();
             if (next != null) {
-                System.out.println("📢 " + getLocalName() + " - Next in queue: " + next.robotAgent + " (Priority: " + next.priority + ")");
+                System.out.println("📢 " + agentName + " - Next in queue: " + next.robotAgent + " (Priority: " + next.priority + ")");
             }
         }
     }
@@ -1561,6 +1640,51 @@ public class ConveyorAgent extends Agent {
             } catch (Exception e) {
                 System.err.println("❌ " + getLocalName() + " - Error handling robot exit notification: " + e.getMessage());
                 e.printStackTrace();
+            }
+        }
+    }
+
+    /**
+     * Handles FIPA-Request messages from RobotAgents to complete the pickup process.
+     */
+    private class PickupCompletionHandler extends CyclicBehaviour {
+        private final MessageTemplate mt = MessageTemplate.and(
+            MessageTemplate.MatchProtocol("fipa-request"),
+            MessageTemplate.and(
+                MessageTemplate.MatchPerformative(ACLMessage.REQUEST),
+                MessageTemplate.MatchOntology("conveyor-pickup")
+            )
+        );
+
+        @Override
+        public void action() {
+            ACLMessage msg = myAgent.receive(mt);
+            if (msg != null) {
+                System.out.println("Received pickup completion request from " + msg.getSender().getLocalName());
+                String content = msg.getContent();
+                String robotName = extractValue(content, ":robot-name");
+
+                if (robotName != null) {
+                    // 1. Set produced to false
+                    setProduced(false);
+
+                    // 2. Notify that pickup is complete
+                    notifyPickupComplete(robotName);
+
+                    // 3. Send a confirmation reply
+                    ACLMessage reply = msg.createReply();
+                    reply.setPerformative(ACLMessage.INFORM);
+                    reply.setContent("(status :action pickup-complete :result success)");
+                    myAgent.send(reply);
+                } else {
+                    // Send a failure reply
+                    ACLMessage reply = msg.createReply();
+                    reply.setPerformative(ACLMessage.FAILURE);
+                    reply.setContent("(status :action pickup-complete :result failure :reason \"missing-robot-name\")");
+                    myAgent.send(reply);
+                }
+            } else {
+                block();
             }
         }
     }

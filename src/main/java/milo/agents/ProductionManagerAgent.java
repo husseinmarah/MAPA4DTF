@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Handles task assignment, status monitoring, and acknowledgement tracking
  * Integrates with Federation Address Protocol (FAP) for agent coordination
  */
-public class ProductionAgentManager extends Agent {
+public class ProductionManagerAgent extends Agent {
 
     // =====================================================================
     // AGENT MANAGEMENT
@@ -118,6 +118,10 @@ public class ProductionAgentManager extends Agent {
         } else {
             // Link JADE agent name to Keycloak identity
             securityManager.linkAgentToContext(getLocalName(), keycloakUsername);
+
+            // NEW: Get trust score and report to TrustManager
+            double initialTrustScore = securityManager.getAgentTrustScore(keycloakUsername);
+            reportInitialTrustScore(initialTrustScore);
         }
 
         // Initialize data structures
@@ -265,6 +269,74 @@ public class ProductionAgentManager extends Agent {
 
         } catch (Exception e) {
             System.err.println("Error logging OPA authorization summary: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Sends the initial trust score to the TrustManagerAgent.
+     * @param score The initial trust score.
+     */
+    private void reportInitialTrustScore(double score) {
+        try {
+            // Find TrustManagerAgent through Directory Facilitator
+            DFAgentDescription template = new DFAgentDescription();
+            ServiceDescription sd = new ServiceDescription();
+            sd.setType("TrustManagement");
+            template.addServices(sd);
+
+            DFAgentDescription[] results = DFService.search(this, template);
+
+            if (results.length > 0) {
+                AID trustManager = results[0].getName();
+
+                ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
+                msg.addReceiver(trustManager);
+                msg.setProtocol("initial-trust-score");
+                msg.setContent("(:agent-id \"" + getLocalName() + "\" :score " + score + ")");
+                send(msg);
+                System.out.println("📈 " + getLocalName() + " - Reported initial trust score: " + score +", Receiver: " + trustManager);
+            } else {
+                System.err.println("⚠️ " + getLocalName() + " - TrustManagerAgent not found in DF. Cannot report initial trust score.");
+            }
+        } catch (Exception e) {
+            System.err.println("❌ " + getAID().getLocalName() + " - Error reporting initial trust score: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Sends a trust update message to the TrustManagerAgent.
+     * @param outcome The outcome of the task, e.g., "SUCCESS" or "FAILURE".
+     */
+    private void sendTrustUpdate(String outcome) {
+        try {
+            // Find TrustManagerAgent through Directory Facilitator
+            DFAgentDescription template = new DFAgentDescription();
+            ServiceDescription sd = new ServiceDescription();
+            sd.setType("TrustManagement");
+            template.addServices(sd);
+
+            DFAgentDescription[] results = DFService.search(this, template);
+
+            if (results.length > 0) {
+                AID trustManager = results[0].getName();
+
+                if (trustManager == null) {
+                    System.err.println("ERROR: TrustManager AID is null after getting it from DF");
+                    return;
+                }
+
+                ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
+                msg.addReceiver(trustManager);
+                msg.setProtocol("trust-update");
+                msg.setContent("(:agent-id \"" + getLocalName() + "\" :outcome \"" + outcome + "\")");
+                send(msg);
+                System.out.println("📈 " + getLocalName() + " - Sent trust update: " + outcome);
+            } else {
+                System.err.println("⚠️ " + getLocalName() + " - TrustManagerAgent not found in DF.");
+            }
+        } catch (Exception e) {
+            System.err.println("❌ " + getAID().getLocalName() + " - Error sending trust update: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

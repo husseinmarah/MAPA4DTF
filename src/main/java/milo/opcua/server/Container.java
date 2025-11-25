@@ -7,11 +7,7 @@ import jade.util.ExtendedProperties;
 import jade.util.leap.Properties;
 import jade.wrapper.AgentContainer;
 import jade.wrapper.AgentController;
-import milo.agents.ConveyorAgent;
-import milo.agents.FederationAgentManager;
-import milo.agents.ProductionAgentManager;
-import milo.agents.RobotAgent;
-import jade.tools.ToolAgent.*;
+import milo.agents.*;
 
 /**
  * Dynamic Container - Creates agents based on SystemConfig values
@@ -32,23 +28,30 @@ public class Container {
             AgentController snifferAgent = agentContainer.createNewAgent("sniffer", "jade.tools.sniffer.Sniffer", new Object[0]);
             snifferAgent.start();
 
+            // Start TrustManager agent
+            AgentController trustManager = agentContainer.createNewAgent("TrustManager",
+                    TrustManagerAgent.class.getName(), new Object[]{});
+            trustManager.start();
+            System.out.println("\uD83D\uDE80 TrustManager Started");
+            Thread.sleep(2000);
+
             // Start Federation Address Manager first
-            AgentController famAgent = agentContainer.createNewAgent("FederationAgentManager",
-                    FederationAgentManager.class.getName(), new Object[]{});
+            AgentController famAgent = agentContainer.createNewAgent("FederationManager",
+                    FederationManagerAgent.class.getName(), new Object[]{});
             famAgent.start();
-            System.out.println("Started FederationAgentManager");
+            System.out.println("\uD83D\uDE80 FederationManager Started");
 
             // Wait a bit for FAM to initialize
             Thread.sleep(2000);
 
             // Start Production Agent Manager second
             AgentController productionManager = agentContainer.createNewAgent("ProductionManager",
-                    ProductionAgentManager.class.getName(), new Object[]{});
+                    ProductionManagerAgent.class.getName(), new Object[]{});
             productionManager.start();
-            System.out.println("Started ProductionManager");
+            System.out.println("\uD83D\uDE80 ProductionManager Started");
 
             // Wait for ProductionManager to register with DF
-            Thread.sleep(3000);
+            Thread.sleep(2000);
 
             // Create remote containers for different stakeholders
             Profile stakeholder1Profile = new ProfileImpl();
