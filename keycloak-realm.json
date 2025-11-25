@@ -67,6 +67,13 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "trust-manager-client",
+      "secret": "trust-manager-secret",
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect"
     }
   ],
   "users": [
@@ -156,6 +163,16 @@
         "role": ["worker"],
         "trustScore": ["0.8"],
         "status": ["active"]  
+      }
+    },
+    {
+      "username": "service-account-trust-manager-client",
+      "enabled": true,
+      "serviceAccountClientId": "trust-manager-client",
+      "clientRoles": {
+        "realm-management": [
+          "manage-users"
+        ]
       }
     }
   ]

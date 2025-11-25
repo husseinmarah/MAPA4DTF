@@ -9,12 +9,6 @@ import jade.domain.FIPAException;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import milo.security.OPAClient;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
-
-import java.io.FileReader;
-import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,35 +19,23 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class TrustManagerAgent extends Agent {
 
-    private static final double INITIAL_TRUST_SCORE = 0.7;
-    // Default values, to be overridden by config file
-    private double decayFactor = 0.95;
-    private double learningRate = 0.05;
+    private static double INITIAL_TRUST_SCORE = 0;
 
     private Map<String, Double> trustScores = new ConcurrentHashMap<>();
     private OPAClient opaClient;
+    private milo.security.KeycloakClient keycloakClient;
 
     @Override
     protected void setup() {
         System.out.println("✅ " + getLocalName() + " ready (Dynamic Trust Management active)");
-        loadTrustConfig();
         opaClient = new OPAClient();
+        keycloakClient = new milo.security.KeycloakClient();
         registerWithDF();
 
         addBehaviour(new TrustManagementBehaviour());
     }
 
-    private void loadTrustConfig() {
-        JSONParser parser = new JSONParser();
-        try (FileReader reader = new FileReader("configs/trust_config.json")) {
-            JSONObject config = (JSONObject) parser.parse(reader);
-            this.decayFactor = (Double) config.get("decay_factor");
-            this.learningRate = (Double) config.get("learning_rate");
-            System.out.println("✅ Trust parameters loaded from config: decay=" + decayFactor + ", learning=" + learningRate);
-        } catch (IOException | ParseException e) {
-            System.err.println("⚠️ Could not load 'configs/trust_config.json'. Using default trust parameters. Error: " + e.getMessage());
-        }
-    }
+
 
     private void registerWithDF() {
         DFAgentDescription dfd = new DFAgentDescription();
@@ -84,14 +66,12 @@ public class TrustManagerAgent extends Agent {
 
             ACLMessage msg = receive(mt);
             if (msg != null) {
-                System.out.println("<UNK> " + getLocalName() + " received a message: " + msg);
-
                 switch (msg.getProtocol()) {
-                    case "trust-update":
-                        handleTrustUpdate(msg);
-                        break;
                     case "initial-trust-score":
                         handleInitialTrustScore(msg);
+                        break;
+                    case "trust-update":
+                        handleTrustUpdate(msg);
                         break;
                     case "query-trust-score":
                         handleTrustQuery(msg);
@@ -116,9 +96,17 @@ public class TrustManagerAgent extends Agent {
             double currentScore = trustScores.getOrDefault(agentName, INITIAL_TRUST_SCORE);
             
             // Delegate trust calculation to OPA with dynamic parameters
-            double newScore = opaClient.evaluateTrustScoreUpdate(currentScore, outcome, this.decayFactor, this.learningRate);
+            double newScore = opaClient.evaluateTrustScoreUpdate(currentScore, outcome, 0.10, 0.05);
 
             trustScores.put(agentName, newScore);
+
+            // NEW: Update score in Keycloak
+            boolean success = keycloakClient.updateUserTrustScore(agentName, newScore);
+            if (success) {
+                System.out.println("✅ Successfully propagated trust score to Keycloak for " + agentName);
+            } else {
+                System.err.println("❌ Failed to propagate trust score to Keycloak for " + agentName);
+            }
 
             System.out.println("┌─ TRUST SCORE UPDATE (via OPA) ───────────────────");
             System.out.println("│  ⚖️  AGENT: " + agentName);
@@ -146,6 +134,7 @@ public class TrustManagerAgent extends Agent {
             String content = msg.getContent();
             String agentName = extractValue(content, ":agent-id");
             Double score = extractDoubleValue(content, ":score");
+            INITIAL_TRUST_SCORE = score;
 
             if (agentName == null || score == null) {
                 System.err.println("❌ " + getLocalName() + " - Could not parse initial trust score message: " + content);

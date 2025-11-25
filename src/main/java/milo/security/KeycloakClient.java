@@ -9,7 +9,9 @@ import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
 import com.nimbusds.jwt.proc.DefaultJWTProcessor;
+import io.github.cdimascio.dotenv.Dotenv;
 import okhttp3.*;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -27,6 +29,8 @@ import java.util.concurrent.TimeUnit;
  * - Token-based authorization
  */
 public class KeycloakClient {
+
+    private static final Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
     
     private final String keycloakUrl;
     private final String realm;
@@ -131,14 +135,6 @@ public class KeycloakClient {
                 
                 // Parse token to extract user attributes
                 UserAttributes userAttrs = parseToken(accessToken);
-                
-                System.out.println("┌─ KEYCLOAK AUTHENTICATION ────────────────────────");
-                System.out.println("│  ✅ SUCCESS");
-                System.out.println("│  Agent:       " + username);
-                System.out.println("│  Org:         " + userAttrs.org);
-                System.out.println("│  Role:        " + userAttrs.role);
-                System.out.println("│  Trust Score: " + userAttrs.trustScore);
-                System.out.println("└──────────────────────────────────────────────────");
                 
                 return new AuthToken(accessToken, refreshToken, expiresIn, userAttrs);
             }
@@ -267,6 +263,106 @@ public class KeycloakClient {
         } catch (Exception e) {
             System.err.println("[KeycloakClient] Token refresh failed: " + e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Updates the trust score for a user in Keycloak.
+     * This requires admin privileges (e.g., a service account with 'manage-users' role).
+     * @param username The username of the agent/user to update.
+     * @param score The new trust score.
+     * @return true if successful, false otherwise.
+     */
+    public boolean updateUserTrustScore(String username, double score) {
+        try {
+            String adminToken = getAdminAccessToken();
+            if (adminToken == null) {
+                System.err.println("❌ KeycloakClient: Could not get admin token to update trust score.");
+                return false;
+            }
+
+            String userId = getUserId(username, adminToken);
+            if (userId == null) {
+                System.err.println("❌ KeycloakClient: Could not find user ID for '" + username + "'.");
+                return false;
+            }
+
+            // Construct the user update payload. The attribute must be a collection.
+            JSONObject attributes = new JSONObject();
+            attributes.put("trust_score", new JSONArray(new String[]{String.valueOf(score)}));
+
+            JSONObject payload = new JSONObject();
+            payload.put("attributes", attributes);
+
+            String updateUserUrl = keycloakUrl + "/admin/realms/" + realm + "/users/" + userId;
+
+            RequestBody body = RequestBody.create(payload.toString(), MediaType.get("application/json; charset=utf-8"));
+            Request request = new Request.Builder()
+                    .url(updateUserUrl)
+                    .header("Authorization", "Bearer " + adminToken)
+                    .put(body)
+                    .build();
+            
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    System.err.println("❌ KeycloakClient: Failed to update user attribute. Response: " + response.code() + " " + response.body().string());
+                    return false;
+                }
+                System.out.println("✅ KeycloakClient: Successfully updated trust score for " + username + " to " + score);
+                return true;
+            }
+
+        } catch (Exception e) {
+            System.err.println("❌ KeycloakClient: Error updating trust score: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    private String getAdminAccessToken() throws IOException {
+        // Read client credentials from .env file or environment variables, with a fallback for development.
+        String adminClientId = dotenv.get("KEYCLOAK_ADMIN_CLIENT_ID");
+        String adminClientSecret = dotenv.get("KEYCLOAK_ADMIN_CLIENT_SECRET");
+
+        String tokenUrl = keycloakUrl + "/realms/" + realm + "/protocol/openid-connect/token";
+
+        RequestBody formBody = new FormBody.Builder()
+                .add("client_id", adminClientId)
+                .add("client_secret", adminClientSecret)
+                .add("grant_type", "client_credentials")
+                .build();
+
+        Request request = new Request.Builder().url(tokenUrl).post(formBody).build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("Failed to get admin token: " + response.code() + " " + response.body().string());
+            }
+            String responseBody = response.body().string();
+            JSONObject json = new JSONObject(responseBody);
+            return json.getString("access_token");
+        }
+    }
+
+    private String getUserId(String username, String adminToken) throws IOException {
+        String userSearchUrl = keycloakUrl + "/admin/realms/" + realm + "/users?username=" + username + "&exact=true";
+
+        Request request = new Request.Builder()
+                .url(userSearchUrl)
+                .header("Authorization", "Bearer " + adminToken)
+                .get()
+                .build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("Failed to get user ID: " + response.code() + " " + response.body().string());
+            }
+            String responseBody = response.body().string();
+            JSONArray users = new JSONArray(responseBody);
+            if (users.length() == 0) {
+                return null; // User not found
+            }
+            return users.getJSONObject(0).getString("id");
         }
     }
     
