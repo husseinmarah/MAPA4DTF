@@ -34,3 +34,4 @@ docs/*
 # Generated files
 APDescription.txt
 MTPs-Main-Container.txt
+.env
