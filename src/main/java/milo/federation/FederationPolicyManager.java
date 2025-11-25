@@ -9,6 +9,7 @@ import jade.domain.AMSService;
 import jade.domain.JADEAgentManagement.*;
 import milo.security.FederationSecurityManager;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.time.LocalDateTime;
@@ -88,9 +89,11 @@ public class FederationPolicyManager {
         
         // Display integration status
         Map<String, Boolean> serviceStatus = securityManager.getServiceStatus();
-        System.out.println("🔐 FederationPolicyManager integration status:");
-        System.out.println("   OPA: " + (serviceStatus.get("opa-available") ? "✅ Connected" : "❌ Not available"));
-        System.out.println("   Keycloak: " + (serviceStatus.get("keycloak-available") ? "✅ Connected" : "❌ Not available"));
+        System.out.println("┌─ FEDERATION POLICY MANAGER ───────────────────────");
+        System.out.println("│  🔐 Integration Status:");
+        System.out.println("│  OPA: " + (serviceStatus.get("opa-available") ? "✅ Connected" : "❌ Not available"));
+        System.out.println("│  Keycloak: " + (serviceStatus.get("keycloak-available") ? "✅ Connected" : "❌ Not available"));
+        System.out.println("└──────────────────────────────────────────────────");
     }
     
     /**

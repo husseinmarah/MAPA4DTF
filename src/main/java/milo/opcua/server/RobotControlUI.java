@@ -549,7 +549,7 @@ public class RobotControlUI extends JFrame {
             DataValue dataValue = new DataValue(new Variant(value));
             client.writeValue(node, dataValue).get();
             if (nodeId.contains("Quantity")) {
-                System.out.println("Wrote " + nodeId + " = " + value);
+                System.out.println("Writing Value: " + nodeId + " = " + value);
             }
         } catch (Exception e) {
             System.err.println("Error writing " + nodeId + ": " + e.getMessage());
