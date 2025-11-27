@@ -29,6 +29,13 @@ public class Container {
                     new Object[0]);
             snifferAgent.start();
 
+            // Start TrustManager agent
+            AgentController trustManager = agentContainer.createNewAgent("TrustManager",
+                    TrustManagerAgent.class.getName(), new Object[] {});
+            trustManager.start();
+            System.out.println("\uD83D\uDE80 TrustManager Started");
+            Thread.sleep(2000);
+
             // Start Federation Address Manager first
             AgentController federationManager = agentContainer.createNewAgent("FederationManager",
                     FederationManagerAgent.class.getName(), new Object[] {});
@@ -36,13 +43,6 @@ public class Container {
             System.out.println("\uD83D\uDE80 FederationManager Started");
 
             // Wait a bit for FAM to initialize
-            Thread.sleep(3000);
-
-            // Start TrustManager agent
-            AgentController trustManager = agentContainer.createNewAgent("TrustManager",
-                    TrustManagerAgent.class.getName(), new Object[] {});
-            trustManager.start();
-            System.out.println("\uD83D\uDE80 TrustManager Started");
             Thread.sleep(2000);
 
             // Start Production Agent Manager second

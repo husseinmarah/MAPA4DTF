@@ -1337,14 +1337,14 @@ public class ConveyorAgent extends Agent {
     public synchronized void registerForPickup(String robotAgent, int priority) {
         // Check if robot is already the current picker (reserved via CFP)
         if (robotAgent.equals(currentPickingRobot)) {
-            System.out.println("✅ " + getLocalName() + " - " + robotAgent + " already reserved as current picker");
+            System.out.println("✅ " + agentName + " - " + robotAgent + " already reserved as current picker");
             return;
         }
         
         // Check if robot is already in queue
         for (RobotQueueEntry entry : pickupQueue) {
             if (entry.robotAgent.equals(robotAgent)) {
-                System.out.println("⚠️ " + getLocalName() + " - " + robotAgent + " already in pickup queue");
+                System.out.println("⚠️ " + agentName + " - " + robotAgent + " already in pickup queue");
                 return;
             }
         }
@@ -1384,7 +1384,7 @@ public class ConveyorAgent extends Agent {
                 currentPickingRobot = robotAgent;
                 pickupQueue.poll(); // Remove from queue
                 
-                System.out.println("✅ " + getLocalName() + " - " + robotAgent + " authorized for pickup (first in queue)");
+                System.out.println("✅ " + agentName + " - " + robotAgent + " authorized for pickup (first in queue)");
                 return true;
             }
         }
@@ -1394,7 +1394,7 @@ public class ConveyorAgent extends Agent {
             return true;
         }
         
-        System.out.println("⏸️ " + getLocalName() + " - " + robotAgent + " must wait (Queue position: " + getQueuePosition(robotAgent) + ")");
+        System.out.println("⏸️ " + agentName + " - " + robotAgent + " must wait (Queue position: " + getQueuePosition(robotAgent) + ")");
         return false;
     }
     

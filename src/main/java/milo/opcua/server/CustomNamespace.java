@@ -342,16 +342,6 @@ public class CustomNamespace extends ManagedNamespace {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
         executor.scheduleAtFixedRate(() -> {
             for (RobotTemplate robot : robots) {
-                System.out.println("Running Battery Level Reduction");
-                System.out.println(robot.getBatteryLevel());
-                System.out.println(robot.getLocation());
-                System.out.println(robot.getNextLocation());
-                System.out.println(robot.getCarriedProduct());
-                System.out.println(robot.isCarryingProduct());
-                System.out.println(robot.isEnabled());
-                System.out.println(robot.isStop());
-                System.out.println(robot.getRobotName());
-                System.out.println("Robot Battery Level: " + robot.getBatteryLevel());
 
                 int batteryLevel = robot.getBatteryLevel();
                 if (batteryLevel <= 0) continue;
