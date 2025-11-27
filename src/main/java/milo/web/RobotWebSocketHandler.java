@@ -16,6 +16,8 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -33,12 +35,12 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
     private final CustomNamespace customNamespace;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-
     public RobotWebSocketHandler(OpcUaClient opcUaClient, CustomNamespace customNamespace) {
         this.opcUaClient = opcUaClient;
         this.customNamespace = customNamespace;
 
-        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(this::sendDataToAllSessions, 1, 1, TimeUnit.SECONDS);
+        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(this::sendDataToAllSessions, 1, 1,
+                TimeUnit.SECONDS);
     }
 
     @Override
@@ -62,13 +64,51 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private void sendData(WebSocketSession session) throws IOException, ExecutionException, InterruptedException {
+    private void sendData(WebSocketSession session) throws IOException {
         Map<String, Object> data = new HashMap<>();
-        data.put("robots", getRobots());
-        data.put("conveyors", getConveyors());
-        data.put("properties", getProperties());
+
+        boolean opcUaConnected = false;
+        try {
+            List<RobotDTO> robots = getRobots();
+            List<ConveyorDTO> conveyors = getConveyors();
+            PropertiesDTO properties = getProperties();
+
+            data.put("robots", robots);
+            data.put("conveyors", conveyors);
+            data.put("properties", properties);
+            opcUaConnected = true;
+        } catch (Exception e) {
+            data.put("robots", new ArrayList<>());
+            data.put("conveyors", new ArrayList<>());
+            data.put("properties", new PropertiesDTO("", "", ""));
+            opcUaConnected = false;
+        }
+        data.put("opcUaStatus", opcUaConnected);
+
+        // Check OPA
+        data.put("opaStatus", checkHttpService("http://localhost:8181/"));
+
+        // Check Keycloak
+        data.put("keycloakStatus", checkHttpService("http://localhost:8080/"));
+
+        // Add Trust Scores
+        data.put("trustScores", milo.web.SharedTrustScoreService.getTrustScores());
 
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(data)));
+    }
+
+    private boolean checkHttpService(String urlString) {
+        try {
+            URL url = new URL(urlString);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(500);
+            connection.setReadTimeout(500);
+            int code = connection.getResponseCode();
+            return code >= 200 && code < 400;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private List<RobotDTO> getRobots() throws ExecutionException, InterruptedException {
@@ -85,7 +125,8 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
             String carriedProduct = readStringValue("CarriedProductRobot" + robotNumber);
             String target = readStringValue("TargetRobot" + robotNumber);
             int priority = readIntValue("PriorityRobot" + robotNumber);
-            robots.add(new RobotDTO(robotNumber, location, nextLocation, stop, enabled, batteryLevel, carryingProduct, carriedProduct, target, priority));
+            robots.add(new RobotDTO(robotNumber, location, nextLocation, stop, enabled, batteryLevel, carryingProduct,
+                    carriedProduct, target, priority));
         }
         return robots;
     }
@@ -95,7 +136,8 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
         int numConveyors = readIntValue("InputConveyorQuantity-unique-identifier");
         for (int i = 0; i < numConveyors; i++) {
             int conveyorNumber = i + 1;
-            boolean produced = readBooleanValue(customNamespace.getInputConveyors().get(i).getProducedNode().getNodeId().getIdentifier().toString());
+            boolean produced = readBooleanValue(customNamespace.getInputConveyors().get(i).getProducedNode().getNodeId()
+                    .getIdentifier().toString());
             conveyors.add(new ConveyorDTO(conveyorNumber, produced));
         }
         return conveyors;
@@ -107,7 +149,6 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
         String outputConveyorProperties = readStringValue("67-unique-identifier");
         return new PropertiesDTO(pathwayProperties, idleProperties, outputConveyorProperties);
     }
-
 
     private String readStringValue(String nodeId) throws ExecutionException, InterruptedException {
         NodeId node = new NodeId(2, nodeId);

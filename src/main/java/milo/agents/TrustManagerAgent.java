@@ -14,7 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Manages the trust scores of all agents in the federation.
- * Scores are updated based on task outcomes by querying an OPA policy with dynamic parameters.
+ * Scores are updated based on task outcomes by querying an OPA policy with
+ * dynamic parameters.
  * Provides a service for querying agent trust scores.
  */
 public class TrustManagerAgent extends Agent {
@@ -35,8 +36,6 @@ public class TrustManagerAgent extends Agent {
         addBehaviour(new TrustManagementBehaviour());
     }
 
-
-
     private void registerWithDF() {
         DFAgentDescription dfd = new DFAgentDescription();
         dfd.setName(getAID());
@@ -55,14 +54,11 @@ public class TrustManagerAgent extends Agent {
     private class TrustManagementBehaviour extends CyclicBehaviour {
         @Override
         public void action() {
-            MessageTemplate mt =
+            MessageTemplate mt = MessageTemplate.or(
                     MessageTemplate.or(
-                            MessageTemplate.or(
-                                    MessageTemplate.MatchProtocol("trust-update"),
-                                    MessageTemplate.MatchProtocol("query-trust-score")
-                            ),
-                            MessageTemplate.MatchProtocol("initial-trust-score")
-                    );
+                            MessageTemplate.MatchProtocol("trust-update"),
+                            MessageTemplate.MatchProtocol("query-trust-score")),
+                    MessageTemplate.MatchProtocol("initial-trust-score"));
 
             ACLMessage msg = receive(mt);
             if (msg != null) {
@@ -94,7 +90,7 @@ public class TrustManagerAgent extends Agent {
             }
 
             double currentScore = trustScores.getOrDefault(agentName, INITIAL_TRUST_SCORE);
-            
+
             // Delegate trust calculation to OPA with dynamic parameters
             double newScore = opaClient.evaluateTrustScoreUpdate(currentScore, outcome, 0.10, 0.05);
 
@@ -107,6 +103,9 @@ public class TrustManagerAgent extends Agent {
             } else {
                 System.err.println("❌ Failed to propagate trust score to Keycloak for " + agentName);
             }
+
+            // NEW: Update shared service for UI
+            milo.web.SharedTrustScoreService.updateTrustScore(agentName, newScore);
 
             System.out.println("┌─ TRUST SCORE UPDATE (via OPA) ───────────────────");
             System.out.println("│  ⚖️  AGENT: " + agentName);
@@ -137,11 +136,15 @@ public class TrustManagerAgent extends Agent {
             INITIAL_TRUST_SCORE = score;
 
             if (agentName == null || score == null) {
-                System.err.println("❌ " + getLocalName() + " - Could not parse initial trust score message: " + content);
+                System.err
+                        .println("❌ " + getLocalName() + " - Could not parse initial trust score message: " + content);
                 return;
             }
 
             trustScores.put(agentName, score);
+
+            // NEW: Update shared service for UI
+            milo.web.SharedTrustScoreService.updateTrustScore(agentName, score);
 
             System.out.println("┌─ INITIAL TRUST SCORE SET ───────────────────────");
             System.out.println("│  AGENT: " + agentName);
@@ -182,7 +185,8 @@ public class TrustManagerAgent extends Agent {
                 return Double.parseDouble(value);
             }
         } catch (Exception e) {
-            System.err.println("[" + getLocalName() + "] Error extracting double value for key " + key + ": " + e.getMessage());
+            System.err.println(
+                    "[" + getLocalName() + "] Error extracting double value for key " + key + ": " + e.getMessage());
         }
         return null;
     }

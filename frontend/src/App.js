@@ -3,6 +3,7 @@ import RobotTable from './components/RobotTable';
 import ConveyorList from './components/ConveyorList';
 import Properties from './components/Properties';
 import Dashboard from './components/Dashboard';
+import TrustScoreCard from './components/TrustScoreCard';
 import './App.css';
 
 function App() {
@@ -46,6 +47,20 @@ function App() {
         <div className="App">
             <header className="App-header">
                 <h1>Robot Control UI</h1>
+                <div className="status-container">
+                    <div className={`status-badge ${data.opcUaStatus ? 'connected' : 'disconnected'}`}>
+                        <div className="status-dot"></div>
+                        {data.opcUaStatus ? 'OPC-UA Connected' : 'OPC-UA Disconnected'}
+                    </div>
+                    <div className={`status-badge ${data.opaStatus ? 'connected' : 'disconnected'}`}>
+                        <div className="status-dot"></div>
+                        {data.opaStatus ? 'OPA Connected' : 'OPA Disconnected'}
+                    </div>
+                    <div className={`status-badge ${data.keycloakStatus ? 'connected' : 'disconnected'}`}>
+                        <div className="status-dot"></div>
+                        {data.keycloakStatus ? 'Keycloak Connected' : 'Keycloak Disconnected'}
+                    </div>
+                </div>
             </header>
             <main>
                 <Dashboard robots={data.robots} conveyors={data.conveyors} />
@@ -55,7 +70,8 @@ function App() {
                         <RobotTable robots={data.robots} />
                     </div>
                     <div className="right-column">
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <TrustScoreCard trustScores={data.trustScores} />
                             <ConveyorList conveyors={data.conveyors} />
                             <Properties properties={data.properties} />
                         </div>
