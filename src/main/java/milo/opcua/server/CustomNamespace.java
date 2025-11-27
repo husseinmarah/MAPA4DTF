@@ -342,13 +342,42 @@ public class CustomNamespace extends ManagedNamespace {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
         executor.scheduleAtFixedRate(() -> {
             for (RobotTemplate robot : robots) {
+                System.out.println("Running Battery Level Reduction");
+                System.out.println(robot.getBatteryLevel());
+                System.out.println(robot.getLocation());
+                System.out.println(robot.getNextLocation());
+                System.out.println(robot.getCarriedProduct());
+                System.out.println(robot.isCarryingProduct());
+                System.out.println(robot.isEnabled());
+                System.out.println(robot.isStop());
+                System.out.println(robot.getRobotName());
+                System.out.println("Robot Battery Level: " + robot.getBatteryLevel());
+
                 int batteryLevel = robot.getBatteryLevel();
-                if (batteryLevel > 0) {
-                    robot.setBatteryLevel(batteryLevel - 1);
+                if (batteryLevel <= 0) continue;
+
+                int newBattery = batteryLevel;
+
+                // Check if the robot is moving
+                if (robot.isEnabled() && !robot.isStop()) {
+
+                    // Larger battery drain when moving
+                    newBattery -= 2;  // or any realistic value
+                } else {
+                    // Minimal idle battery drain
+                    newBattery -= 0.1; // if you support decimals
+                    // or:
+                    // newBattery -= 1;  // very small drain if only integers allowed
                 }
+
+                // Ensure battery doesn’t go negative
+                newBattery = Math.max(0, newBattery);
+
+                robot.setBatteryLevel(newBattery);
             }
         }, 0, 5, TimeUnit.SECONDS);
     }
+
 
     // =====================================================================
     // OPC-UA INFRASTRUCTURE - Required overrides
