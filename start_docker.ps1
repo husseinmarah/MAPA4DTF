@@ -37,3 +37,7 @@ Write-Host "Starting Keycloak + OPA..." -ForegroundColor Cyan
 docker-compose down -v; docker-compose up -d
 
 Write-Host "All services started successfully!" -ForegroundColor Green
+
+Start-Sleep -Seconds 10
+exit 0
+# End of script
