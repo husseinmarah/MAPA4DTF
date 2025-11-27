@@ -35,3 +35,5 @@ docs/*
 APDescription.txt
 MTPs-Main-Container.txt
 .env
+
+/frontend/node_modules/*
