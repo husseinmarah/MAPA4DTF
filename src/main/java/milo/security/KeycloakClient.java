@@ -31,69 +31,69 @@ import java.util.concurrent.TimeUnit;
 public class KeycloakClient {
 
     private static final Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
-    
+
     private final String keycloakUrl;
     private final String realm;
     private final String clientId;
     private final OkHttpClient httpClient;
     private final ConfigurableJWTProcessor<SecurityContext> jwtProcessor;
-    
+
     private static final String DEFAULT_KEYCLOAK_URL = "http://localhost:8080";
     private static final String DEFAULT_REALM = "warehouse-federation";
     private static final String DEFAULT_CLIENT_ID = "warehouse-client";
-    
+
     /**
      * Create Keycloak client with default configuration
      */
     public KeycloakClient() {
         this(DEFAULT_KEYCLOAK_URL, DEFAULT_REALM, DEFAULT_CLIENT_ID);
     }
-    
+
     /**
      * Create Keycloak client with custom configuration
      * 
      * @param keycloakUrl Base URL of Keycloak server
-     * @param realm Keycloak realm name
-     * @param clientId Client ID for authentication
+     * @param realm       Keycloak realm name
+     * @param clientId    Client ID for authentication
      */
     public KeycloakClient(String keycloakUrl, String realm, String clientId) {
         this.keycloakUrl = keycloakUrl;
         this.realm = realm;
         this.clientId = clientId;
-        
+
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(10, TimeUnit.SECONDS)
                 .writeTimeout(10, TimeUnit.SECONDS)
                 .build();
-        
+
         this.jwtProcessor = createJWTProcessor();
     }
-    
+
     /**
      * Create JWT processor for token validation
      */
     private ConfigurableJWTProcessor<SecurityContext> createJWTProcessor() {
         try {
             ConfigurableJWTProcessor<SecurityContext> processor = new DefaultJWTProcessor<>();
-            
+
             // Set up JWKS (JSON Web Key Set) retrieval
             String jwksUrl = keycloakUrl + "/realms/" + realm + "/protocol/openid-connect/certs";
             JWKSource<SecurityContext> keySource = new RemoteJWKSet<>(new URL(jwksUrl));
-            
+
             // Configure JWT processor to use RS256 algorithm
             JWSAlgorithm expectedAlgorithm = JWSAlgorithm.RS256;
-            JWSKeySelector<SecurityContext> keySelector = 
-                new JWSVerificationKeySelector<>(expectedAlgorithm, keySource);
+            JWSKeySelector<SecurityContext> keySelector = new JWSVerificationKeySelector<>(expectedAlgorithm,
+                    keySource);
             processor.setJWSKeySelector(keySelector);
-            
+
             return processor;
         } catch (Exception e) {
             // Silent fail - will be handled during authentication
             return null;
         }
     }
-    
+
     /**
      * Authenticate agent and obtain access token
      * 
@@ -104,19 +104,19 @@ public class KeycloakClient {
     public AuthToken authenticate(String username, String password) {
         try {
             String tokenUrl = keycloakUrl + "/realms/" + realm + "/protocol/openid-connect/token";
-            
+
             RequestBody formBody = new FormBody.Builder()
                     .add("client_id", clientId)
                     .add("username", username)
                     .add("password", password)
                     .add("grant_type", "password")
                     .build();
-            
+
             Request request = new Request.Builder()
                     .url(tokenUrl)
                     .post(formBody)
                     .build();
-            
+
             try (Response response = httpClient.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
                     System.err.println("┌─ KEYCLOAK AUTHENTICATION ────────────────────────");
@@ -125,20 +125,20 @@ public class KeycloakClient {
                     System.err.println("└──────────────────────────────────────────────────");
                     return null;
                 }
-                
+
                 String responseBody = response.body().string();
                 JSONObject json = new JSONObject(responseBody);
-                
+
                 String accessToken = json.getString("access_token");
                 String refreshToken = json.optString("refresh_token", null);
                 int expiresIn = json.optInt("expires_in", 300);
-                
+
                 // Parse token to extract user attributes
                 UserAttributes userAttrs = parseToken(accessToken);
-                
+
                 return new AuthToken(accessToken, refreshToken, expiresIn, userAttrs);
             }
-            
+
         } catch (IOException e) {
             System.err.println("┌─ KEYCLOAK AUTHENTICATION ────────────────────────");
             System.err.println("│  ❌ ERROR - " + e.getMessage());
@@ -151,7 +151,7 @@ public class KeycloakClient {
             return null;
         }
     }
-    
+
     /**
      * Validate access token and extract user attributes
      * 
@@ -166,7 +166,7 @@ public class KeycloakClient {
             return null;
         }
     }
-    
+
     /**
      * Parse JWT token and extract user attributes
      */
@@ -174,20 +174,20 @@ public class KeycloakClient {
         if (jwtProcessor == null) {
             throw new IllegalStateException("JWT processor not initialized");
         }
-        
+
         // Parse and validate JWT
         JWTClaimsSet claims = jwtProcessor.process(accessToken, null);
-        
+
         // Extract custom attributes
         String username = claims.getSubject();
         String org = extractClaim(claims, "org", "unknown");
         String role = extractClaim(claims, "role", "worker");
         double trustScore = extractTrustScore(claims);
         String status = extractClaim(claims, "status", "active");
-        
+
         return new UserAttributes(username, org, role, trustScore, status);
     }
-    
+
     /**
      * Extract string claim from JWT
      */
@@ -202,7 +202,7 @@ public class KeycloakClient {
         }
         return defaultValue;
     }
-    
+
     /**
      * Extract trust score from JWT claims
      */
@@ -218,10 +218,11 @@ public class KeycloakClient {
             }
         } catch (Exception e) {
             // Trust score not found or invalid
+            System.err.println("Trust score extraction failed: " + e.getMessage());
         }
-        return 0.5; // Default trust score
+        return 0; // Default trust score
     }
-    
+
     /**
      * Refresh access token using refresh token
      * 
@@ -231,35 +232,35 @@ public class KeycloakClient {
     public AuthToken refreshToken(String refreshToken) {
         try {
             String tokenUrl = keycloakUrl + "/realms/" + realm + "/protocol/openid-connect/token";
-            
+
             RequestBody formBody = new FormBody.Builder()
                     .add("client_id", clientId)
                     .add("refresh_token", refreshToken)
                     .add("grant_type", "refresh_token")
                     .build();
-            
+
             Request request = new Request.Builder()
                     .url(tokenUrl)
                     .post(formBody)
                     .build();
-            
+
             try (Response response = httpClient.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
                     return null;
                 }
-                
+
                 String responseBody = response.body().string();
                 JSONObject json = new JSONObject(responseBody);
-                
+
                 String accessToken = json.getString("access_token");
                 String newRefreshToken = json.optString("refresh_token", refreshToken);
                 int expiresIn = json.optInt("expires_in", 300);
-                
+
                 UserAttributes userAttrs = parseToken(accessToken);
-                
+
                 return new AuthToken(accessToken, newRefreshToken, expiresIn, userAttrs);
             }
-            
+
         } catch (Exception e) {
             System.err.println("[KeycloakClient] Token refresh failed: " + e.getMessage());
             return null;
@@ -268,9 +269,11 @@ public class KeycloakClient {
 
     /**
      * Updates the trust score for a user in Keycloak.
-     * This requires admin privileges (e.g., a service account with 'manage-users' role).
+     * This requires admin privileges (e.g., a service account with 'manage-users'
+     * role).
+     * 
      * @param username The username of the agent/user to update.
-     * @param score The new trust score.
+     * @param score    The new trust score.
      * @return true if successful, false otherwise.
      */
     public boolean updateUserTrustScore(String username, double score) {
@@ -281,16 +284,24 @@ public class KeycloakClient {
                 return false;
             }
 
-            String userId = getUserId(username, adminToken);
-            if (userId == null) {
-                System.err.println("❌ KeycloakClient: Could not find user ID for '" + username + "'.");
+            JSONObject user = getUser(username, adminToken);
+            if (user == null) {
+                System.err.println("❌ KeycloakClient: Could not find user for '" + username + "'.");
                 return false;
             }
 
-            // Construct the user update payload. The attribute must be a collection.
-            JSONObject attributes = new JSONObject();
-            attributes.put("trust_score", new JSONArray(new String[]{String.valueOf(score)}));
+            String userId = user.getString("id");
 
+            // Get existing attributes or create new
+            JSONObject attributes = user.optJSONObject("attributes");
+            if (attributes == null) {
+                attributes = new JSONObject();
+            }
+
+            // Update trust_score (must be a list of strings)
+            attributes.put("trustScore", new JSONArray(new String[] { String.valueOf(score) }));
+
+            // Construct payload with preserved attributes
             JSONObject payload = new JSONObject();
             payload.put("attributes", attributes);
 
@@ -302,13 +313,15 @@ public class KeycloakClient {
                     .header("Authorization", "Bearer " + adminToken)
                     .put(body)
                     .build();
-            
+
             try (Response response = httpClient.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
-                    System.err.println("❌ KeycloakClient: Failed to update user attribute. Response: " + response.code() + " " + response.body().string());
+                    System.err.println("❌ KeycloakClient: Failed to update user attribute. Response: " + response.code()
+                            + " " + response.body().string());
                     return false;
                 }
-                System.out.println("✅ KeycloakClient: Successfully updated trust score for " + username + " to " + score);
+                System.out
+                        .println("✅ KeycloakClient: Successfully updated trust score for " + username + " to " + score);
                 return true;
             }
 
@@ -320,7 +333,8 @@ public class KeycloakClient {
     }
 
     private String getAdminAccessToken() throws IOException {
-        // Read client credentials from .env file or environment variables, with a fallback for development.
+        // Read client credentials from .env file or environment variables, with a
+        // fallback for development.
         String adminClientId = dotenv.get("KEYCLOAK_ADMIN_CLIENT_ID");
         String adminClientSecret = dotenv.get("KEYCLOAK_ADMIN_CLIENT_SECRET");
 
@@ -344,7 +358,7 @@ public class KeycloakClient {
         }
     }
 
-    private String getUserId(String username, String adminToken) throws IOException {
+    private JSONObject getUser(String username, String adminToken) throws IOException {
         String userSearchUrl = keycloakUrl + "/admin/realms/" + realm + "/users?username=" + username + "&exact=true";
 
         Request request = new Request.Builder()
@@ -355,31 +369,32 @@ public class KeycloakClient {
 
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
-                throw new IOException("Failed to get user ID: " + response.code() + " " + response.body().string());
+                throw new IOException("Failed to get user: " + response.code() + " " + response.body().string());
             }
             String responseBody = response.body().string();
             JSONArray users = new JSONArray(responseBody);
             if (users.length() == 0) {
                 return null; // User not found
             }
-            return users.getJSONObject(0).getString("id");
+            return users.getJSONObject(0);
         }
     }
-    
+
     /**
      * Check if Keycloak service is available
      * 
      * @return true if Keycloak is reachable
      */
+
     public boolean isAvailable() {
         try {
             String healthUrl = keycloakUrl + "/realms/" + realm;
-            
+
             Request request = new Request.Builder()
                     .url(healthUrl)
                     .get()
                     .build();
-            
+
             try (Response response = httpClient.newCall(request).execute()) {
                 return response.isSuccessful();
             }
@@ -387,7 +402,7 @@ public class KeycloakClient {
             return false;
         }
     }
-    
+
     /**
      * User attributes extracted from Keycloak token
      */
@@ -397,7 +412,7 @@ public class KeycloakClient {
         public final String role;
         public final double trustScore;
         public final String status;
-        
+
         public UserAttributes(String username, String org, String role, double trustScore, String status) {
             this.username = username;
             this.org = org;
@@ -405,14 +420,14 @@ public class KeycloakClient {
             this.trustScore = trustScore;
             this.status = status;
         }
-        
+
         @Override
         public String toString() {
-            return "UserAttributes{username='" + username + "', org='" + org + 
-                   "', role='" + role + "', trustScore=" + trustScore + ", status='" + status + "'}";
+            return "UserAttributes{username='" + username + "', org='" + org +
+                    "', role='" + role + "', trustScore=" + trustScore + ", status='" + status + "'}";
         }
     }
-    
+
     /**
      * Authentication token with user attributes
      */
@@ -422,7 +437,7 @@ public class KeycloakClient {
         public final int expiresIn;
         public final UserAttributes userAttributes;
         public final long createdAt;
-        
+
         public AuthToken(String accessToken, String refreshToken, int expiresIn, UserAttributes userAttributes) {
             this.accessToken = accessToken;
             this.refreshToken = refreshToken;
@@ -430,7 +445,7 @@ public class KeycloakClient {
             this.userAttributes = userAttributes;
             this.createdAt = System.currentTimeMillis();
         }
-        
+
         /**
          * Check if token is expired
          */
@@ -438,7 +453,7 @@ public class KeycloakClient {
             long elapsedSeconds = (System.currentTimeMillis() - createdAt) / 1000;
             return elapsedSeconds >= expiresIn;
         }
-        
+
         /**
          * Check if token needs refresh (80% of lifetime)
          */
@@ -447,7 +462,7 @@ public class KeycloakClient {
             return elapsedSeconds >= (expiresIn * 0.8);
         }
     }
-    
+
     /**
      * Shutdown the HTTP client
      */

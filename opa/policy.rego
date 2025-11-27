@@ -262,18 +262,36 @@ allow if {
 default evaluate_trust = null
 
 # --- Main evaluation when outcome is known ---
+# --- SUCCESS: Use EMA to gradually increase score ---
 evaluate_trust = new_score if {
     trust := input.trust_data
     params := input.trust_params
-    is_known_outcome(trust.outcome)
+    trust.outcome == "SUCCESS"
 
     current := trust.current_score
-    outcome_val := trust_outcome_value(trust.outcome)
-
-    decay_factor := params.decay_factor
     learning_rate := params.learning_rate
 
-    raw := (current * decay_factor) + (outcome_val * learning_rate)
+    # EMA for Success: Move towards 1.0
+    # New = Current * (1 - LR) + 1.0 * LR
+    retention := 1.0 - learning_rate
+    raw := (current * retention) + learning_rate
+
+    new_score := clamp01(raw)
+}
+
+# --- FAILURE: Apply Decay Factor penalty ---
+evaluate_trust = new_score if {
+    trust := input.trust_data
+    params := input.trust_params
+    trust.outcome == "FAILURE"
+
+    current := trust.current_score
+    decay_factor := params.decay_factor
+
+    # Decay for Failure: Reduce by DecayFactor
+    # New = Current * (1 - DecayFactor)
+    retention := 1.0 - decay_factor
+    raw := current * retention
 
     new_score := clamp01(raw)
 }
