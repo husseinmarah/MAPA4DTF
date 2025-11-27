@@ -89,6 +89,17 @@
       }
     },
     {
+      "username": "TrustManagerAgent",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "trust", "temporary": false }],
+      "attributes": {
+        "org": ["main"],
+        "role": ["trust_manager"],
+        "trustScore": ["0.99"],
+        "status": ["active"]
+      }
+    },
+    {
       "username": "ProductionAgentManager",
       "enabled": true,
       "credentials": [{ "type": "password", "value": "production", "temporary": false }],
