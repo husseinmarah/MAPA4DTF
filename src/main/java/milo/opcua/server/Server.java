@@ -15,8 +15,6 @@ import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime;
 import org.eclipse.milo.opcua.stack.core.types.structured.BuildInfo;
 import org.eclipse.milo.opcua.stack.server.EndpointConfiguration;
 import org.eclipse.milo.opcua.stack.server.security.ServerCertificateValidator;
-import org.springframework.boot.SpringApplication;
-import org.springframework.context.ConfigurableApplicationContext;
 
 import java.security.cert.X509Certificate;
 import java.util.List;
@@ -52,16 +50,68 @@ public class Server {
         // Start the container with configured agents
         Container.startContainer();
 
+        // Start the frontend React application
+        startFrontend();
+
         System.out.println("✅ Federated Multi-Agent System started successfully");
         System.out.println("📋 Available Services:");
         System.out.println("   • OPC UA Server: opc.tcp://localhost:" + SystemConfig.SERVER_PORT);
         System.out.println("   • JADE Container: Main-Container with policy enforcement");
         System.out.println("   • Federation Services: Available through FAM agent");
         System.out.println("   • Policy Management: Integrated with DF and AMS");
-        System.out.println("   • Web UI: http://localhost:8");
+        System.out.println("   • Web UI: http://localhost:3000");
+        System.out.println("   • React Frontend: Starting...");
 
         // Wait indefinitely
         Thread.sleep(Long.MAX_VALUE);
+    }
+
+
+    private static void startFrontend() {
+        Thread frontendThread = new Thread(() -> {
+            try {
+                String frontendPath = System.getProperty("user.dir") + "/frontend";
+                
+                System.out.println("🌐 Starting React Frontend...");
+                System.out.println("   Frontend path: " + frontendPath);
+
+                // Check if frontend directory exists
+                java.io.File frontendDir = new java.io.File(frontendPath);
+                if (!frontendDir.exists()) {
+                    System.err.println("❌ Frontend directory not found: " + frontendPath);
+                    return;
+                }
+
+                // Build the command based on OS
+                ProcessBuilder processBuilder;
+                String os = System.getProperty("os.name").toLowerCase();
+                
+                if (os.contains("win")) {
+                    // Windows: Use npm.cmd
+                    processBuilder = new ProcessBuilder("npm.cmd", "start");
+                } else {
+                    // Linux/Mac: Use npm
+                    processBuilder = new ProcessBuilder("npm", "start");
+                }
+
+                processBuilder.directory(frontendDir);
+                processBuilder.inheritIO(); // Inherit console I/O to see npm output
+                
+                Process process = processBuilder.start();
+                System.out.println("✅ React Frontend started (PID: " + process.pid() + ")");
+                
+                // Wait for the process to complete
+                int exitCode = process.waitFor();
+                System.out.println("⚠️  React Frontend process exited with code: " + exitCode);
+
+            } catch (Exception e) {
+                System.err.println("❌ Failed to start React Frontend: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }, "Frontend-Starter");
+
+        frontendThread.setDaemon(false);
+        frontendThread.start();
     }
 
     private static CustomNamespace startOpcUaServer() throws Exception {
