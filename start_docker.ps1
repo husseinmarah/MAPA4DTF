@@ -39,5 +39,5 @@ docker-compose down -v; docker-compose up -d
 Write-Host "All services started successfully!" -ForegroundColor Green
 
 Start-Sleep -Seconds 10
-exit 0
+[System.Environment]::Exit(0)
 # End of script
