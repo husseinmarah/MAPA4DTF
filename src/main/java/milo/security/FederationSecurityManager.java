@@ -230,10 +230,11 @@ public class FederationSecurityManager {
             
             KeycloakClient.UserAttributes attrs = token.userAttributes;
             
-            // Evaluate service access policy with OPA
+            // For conveyor_access, agent is checking its own authorization (self-check)
+            // Pass sender info as both sender AND receiver so OPA rule can match
             OPAClient.PolicyDecision decision = opaClient.evaluateCommunicationPolicy(
                 agentName, attrs.org, attrs.role, attrs.trustScore, attrs.status,
-                serviceName + "Service", "main", "service", 1.0, "active", serviceName
+                agentName, attrs.org, attrs.role, attrs.trustScore, attrs.status, serviceName
             );
             
             // Print detailed OPA policy

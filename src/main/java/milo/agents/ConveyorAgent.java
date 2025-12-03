@@ -233,6 +233,7 @@ public class ConveyorAgent extends Agent {
             }
             
             // Check if agent can access conveyor operation service
+            // SecurityManager now properly constructs OPA query with sender context for self-authorization
             boolean authorized = securityManager.canAccessService(getLocalName(), "conveyor_access");
             
             // Update the enabled status based on authorization
@@ -1689,3 +1690,6 @@ public class ConveyorAgent extends Agent {
         }
     }
 }
+
+
+
