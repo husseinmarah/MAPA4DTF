@@ -559,6 +559,10 @@ public class ConveyorAgent extends Agent {
         return producedNode;
     }
     
+    public UaVariableNode getEnabledNode() {
+        return enabledNode;
+    }
+    
     public int getConveyorId() {
         return conveyorId;
     }

@@ -136,9 +136,11 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
         int numConveyors = readIntValue("InputConveyorQuantity-unique-identifier");
         for (int i = 0; i < numConveyors; i++) {
             int conveyorNumber = i + 1;
-            boolean produced = readBooleanValue(customNamespace.getInputConveyors().get(i).getProducedNode().getNodeId()
+            boolean produced = readBooleanValue(CustomNamespace.inputConveyors.get(i).getProducedNode().getNodeId()
                     .getIdentifier().toString());
-            conveyors.add(new ConveyorDTO(conveyorNumber, produced));
+            boolean enabled = readBooleanValue(CustomNamespace.inputConveyors.get(i).getEnabledNode().getNodeId()
+                    .getIdentifier().toString());
+            conveyors.add(new ConveyorDTO(conveyorNumber, produced, enabled));
         }
         return conveyors;
     }

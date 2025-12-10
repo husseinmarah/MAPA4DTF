@@ -14,15 +14,27 @@ const ConveyorList = ({ conveyors }) => {
                 {conveyors.map(conveyor => (
                     <li key={conveyor.id} className="list-item">
                         <span style={{ fontWeight: 500 }}>Conveyor {conveyor.id}</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span style={{ fontSize: '0.875rem', color: conveyor.produced ? '#10b981' : '#64748b' }}>
-                                {conveyor.produced ? 'Produced' : 'Pending'}
-                            </span>
-                            <input
-                                type="checkbox"
-                                checked={conveyor.produced}
-                                onChange={(e) => handleProducedChange(conveyor.id, e.target.checked)}
-                            />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ fontSize: '0.875rem', color: conveyor.produced ? '#10b981' : '#64748b' }}>
+                                    Produced
+                                </span>
+                                <input
+                                    type="checkbox"
+                                    checked={conveyor.produced}
+                                    onChange={(e) => handleProducedChange(conveyor.id, e.target.checked)}
+                                />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ fontSize: '0.875rem' }}>
+                                    Enabled
+                                </span>
+                                <input
+                                    type="checkbox"
+                                    checked={conveyor.enabled}
+                                    readOnly
+                                />
+                            </div>
                         </div>
                     </li>
                 ))}
