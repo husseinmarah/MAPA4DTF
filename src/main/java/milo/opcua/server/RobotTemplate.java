@@ -15,10 +15,12 @@ public class RobotTemplate {
     private UaVariableNode carryingProduct;
     private UaVariableNode carriedProduct;
     private UaVariableNode enabledRobot;
+    private UaVariableNode trustScore;
 
     public RobotTemplate(UaVariableNode location, UaVariableNode nextLocation, UaVariableNode batteryLevel,
-                         UaVariableNode target, UaVariableNode stop, UaVariableNode priority,
-                         UaVariableNode carryingProduct, UaVariableNode carriedProduct, UaVariableNode enabledRobot) {
+            UaVariableNode target, UaVariableNode stop, UaVariableNode priority,
+            UaVariableNode carryingProduct, UaVariableNode carriedProduct, UaVariableNode enabledRobot,
+            UaVariableNode trustScore) {
         this.location = location;
         this.nextLocation = nextLocation;
         this.batteryLevel = batteryLevel;
@@ -28,6 +30,7 @@ public class RobotTemplate {
         this.carryingProduct = carryingProduct;
         this.carriedProduct = carriedProduct;
         this.enabledRobot = enabledRobot;
+        this.trustScore = trustScore;
     }
 
     public String getLocation() {
@@ -66,6 +69,10 @@ public class RobotTemplate {
         return (boolean) enabledRobot.getValue().getValue().getValue();
     }
 
+    public double getTrustScore() {
+        return (double) trustScore.getValue().getValue().getValue();
+    }
+
     public void setLocation(String value) {
         location.setValue(new DataValue(new Variant(value)));
     }
@@ -102,9 +109,14 @@ public class RobotTemplate {
         enabledRobot.setValue(new DataValue(new Variant(value)));
     }
 
+    public void setTrustScore(double value) {
+        trustScore.setValue(new DataValue(new Variant(value)));
+    }
+
     public void setRobotName(String robotName) {
         this.robotName = robotName;
     }
+
     public String getRobotName() {
         return robotName;
     }

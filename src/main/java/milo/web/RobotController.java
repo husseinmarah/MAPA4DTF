@@ -1,7 +1,6 @@
 package milo.web;
 
 import milo.opcua.server.CustomNamespace;
-import milo.opcua.server.SystemConfig;
 import milo.web.data.ConveyorDTO;
 import milo.web.data.PropertiesDTO;
 import milo.web.data.RobotDTO;
@@ -49,7 +48,8 @@ public class RobotController {
             String carriedProduct = readStringValue("CarriedProductRobot" + robotNumber);
             String target = readStringValue("TargetRobot" + robotNumber);
             int priority = readIntValue("PriorityRobot" + robotNumber);
-            robots.add(new RobotDTO(robotNumber, location, nextLocation, stop, enabled, batteryLevel, carryingProduct, carriedProduct, target, priority));
+            robots.add(new RobotDTO(robotNumber, location, nextLocation, stop, enabled, batteryLevel, carryingProduct,
+                    carriedProduct, target, priority));
         }
         return robots;
     }
@@ -60,8 +60,10 @@ public class RobotController {
         int numConveyors = readIntValue("InputConveyorQuantity-unique-identifier");
         for (int i = 0; i < numConveyors; i++) {
             int conveyorNumber = i + 1;
-            boolean produced = readBooleanValue(CustomNamespace.inputConveyors.get(i).getProducedNode().getNodeId().getIdentifier().toString());
-            boolean enabled = readBooleanValue(CustomNamespace.inputConveyors.get(i).getEnabledNode().getNodeId().getIdentifier().toString());
+            boolean produced = readBooleanValue(
+                    CustomNamespace.inputConveyors.get(i).getProducedNode().getNodeId().getIdentifier().toString());
+            boolean enabled = readBooleanValue(
+                    CustomNamespace.inputConveyors.get(i).getEnabledNode().getNodeId().getIdentifier().toString());
             conveyors.add(new ConveyorDTO(conveyorNumber, produced, enabled));
         }
         return conveyors;
@@ -92,7 +94,8 @@ public class RobotController {
 
     @PostMapping("/conveyors/{id}/produced")
     public void setConveyorProduced(@PathVariable int id, @RequestBody Map<String, Boolean> payload) {
-        String nodeId = customNamespace.getInputConveyors().get(id - 1).getProducedNode().getNodeId().getIdentifier().toString();
+        String nodeId = customNamespace.getInputConveyors().get(id - 1).getProducedNode().getNodeId().getIdentifier()
+                .toString();
         writeValue(nodeId, payload.get("produced"));
     }
 
@@ -106,6 +109,47 @@ public class RobotController {
         writeValue("InputConveyorQuantity-unique-identifier", payload.get("quantity"));
     }
 
+    @PostMapping("/trust-score")
+    public void updateTrustScore(@RequestBody Map<String, Object> payload) {
+        String agentName = (String) payload.get("agentName");
+        Object scoreObj = payload.get("score");
+        double score = scoreObj instanceof Integer ? ((Integer) scoreObj).doubleValue() : (Double) scoreObj;
+
+        // 1. Update SharedTrustScoreService
+        SharedTrustScoreService.updateTrustScore(agentName, score);
+
+        // 2. Update OPC-UA Node
+        if (agentName.startsWith("Robot")) {
+            try {
+                // Extract robot number from name, e.g. "Robot1" -> 1
+                // Assuming name format "Robot<N>"
+                String numStr = agentName.replace("Robot", "");
+                // Handle cases where name might be "RobotAgent1"
+                numStr = numStr.replace("Agent", "");
+
+                int robotNum = Integer.parseInt(numStr);
+                if (robotNum > 0 && robotNum <= CustomNamespace.getRobots().size()) {
+                    CustomNamespace.getRobots().get(robotNum - 1).setTrustScore(score);
+                }
+            } catch (NumberFormatException e) {
+                System.err.println("Could not parse robot number from agent name: " + agentName);
+            }
+        } else if (agentName.startsWith("Conveyor")) {
+            try {
+                // Extract conveyor number from name, e.g. "Conveyor1" -> 1
+                String numStr = agentName.replace("Conveyor", "");
+                // Handle cases where name might be "ConveyorAgent1"
+                numStr = numStr.replace("Agent", "");
+
+                int conveyorNum = Integer.parseInt(numStr);
+                if (conveyorNum > 0 && conveyorNum <= CustomNamespace.getInputConveyors().size()) {
+                    CustomNamespace.getInputConveyors().get(conveyorNum - 1).setTrustScore(score);
+                }
+            } catch (NumberFormatException e) {
+                System.err.println("Could not parse conveyor number from agent name: " + agentName);
+            }
+        }
+    }
 
     private String readStringValue(String nodeId) throws ExecutionException, InterruptedException {
         NodeId node = new NodeId(2, nodeId);

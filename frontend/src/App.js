@@ -43,6 +43,21 @@ function App() {
         );
     }
 
+    const handleTrustScoreUpdate = async (agentName, score) => {
+        try {
+            await fetch('http://localhost:8282/api/v1/trust-score', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ agentName, score }),
+            });
+            console.log(`Updated trust score for ${agentName} to ${score}`);
+        } catch (error) {
+            console.error('Error updating trust score:', error);
+        }
+    };
+
     return (
         <div className="App">
             <header className="App-header">
@@ -71,7 +86,7 @@ function App() {
                     </div>
                     <div className="right-column">
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <TrustScoreCard trustScores={data.trustScores} />
+                            <TrustScoreCard trustScores={data.trustScores} onUpdateScore={handleTrustScoreUpdate} />
                             <ConveyorList conveyors={data.conveyors} />
                             <Properties properties={data.properties} />
                         </div>

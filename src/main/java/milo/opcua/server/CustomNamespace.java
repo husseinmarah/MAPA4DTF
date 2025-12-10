@@ -44,7 +44,7 @@ public class CustomNamespace extends ManagedNamespace {
     // =====================================================================
     public static List<RobotTemplate> robots = new ArrayList<>();
     public static List<ConveyorAgent> inputConveyors = new ArrayList<>();
-    
+
     // =====================================================================
     // SYSTEM PROPERTIES - Clear organization
     // =====================================================================
@@ -64,7 +64,7 @@ public class CustomNamespace extends ManagedNamespace {
     public CustomNamespace(OpcUaServer server) throws Exception {
         super(server, URI);
         this.subscriptionModel = new SubscriptionModel(server, this);
-        
+
         // Register items immediately in constructor like the working version
         registerItems(getNodeContext());
         startBatteryLevelReduction();
@@ -79,16 +79,16 @@ public class CustomNamespace extends ManagedNamespace {
 
         // 1. Setup main folder
         setupMainFolder(context);
-        
+
         // 2. Create all component types immediately
         createAllComponents(context);
-        
+
         // 3. Create all system properties immediately
         createAllSystemProperties(context);
-        
+
         // 4. Load all JSON data immediately
         loadAllJsonData();
-        
+
         // 5. Add all nodes to folder immediately like working version
         addAllNodesToFolderImmediate(context);
     }
@@ -130,7 +130,7 @@ public class CustomNamespace extends ManagedNamespace {
             UaVariableNode node = createSimpleVariableNode(context, prop.nodeId, Identifiers.String, prop.name);
             systemProperties.put(prop.name, node);
         }
-        
+
         // Set legacy references for backward compatibility
         pathwayProperties = systemProperties.get("pathwayProperties");
         idleProperties = systemProperties.get("idleProperties");
@@ -138,9 +138,11 @@ public class CustomNamespace extends ManagedNamespace {
         inputconveyorProperties = systemProperties.get("inputconveyorProperties");
 
         // Create quantity nodes using SystemConfig values
-        robotQuantity = createSimpleVariableNode(context, "RobotQuantity-unique-identifier", Identifiers.Int32, "RobotQuantity");
-        inputConveyorQuantity = createSimpleVariableNode(context, "InputConveyorQuantity-unique-identifier", Identifiers.Int32, "InputConveyorQuantity");
-        
+        robotQuantity = createSimpleVariableNode(context, "RobotQuantity-unique-identifier", Identifiers.Int32,
+                "RobotQuantity");
+        inputConveyorQuantity = createSimpleVariableNode(context, "InputConveyorQuantity-unique-identifier",
+                Identifiers.Int32, "InputConveyorQuantity");
+
         // Set initial values using SystemConfig
         robotQuantity.setValue(new DataValue(new Variant(SystemConfig.NUM_ROBOTS)));
         inputConveyorQuantity.setValue(new DataValue(new Variant(SystemConfig.NUM_INPUT_CONVEYORS)));
@@ -149,14 +151,15 @@ public class CustomNamespace extends ManagedNamespace {
     private void addAllNodesToFolderImmediate(UaNodeContext context) {
         // Add system properties to folder using SystemConfig
         systemProperties.values().forEach(node -> addNodeToFolderImmediate(context, node));
-        
+
         // Add quantity nodes
         addNodeToFolderImmediate(context, robotQuantity);
         addNodeToFolderImmediate(context, inputConveyorQuantity);
     }
 
     // Simple node creation like old working version
-    private UaVariableNode createSimpleVariableNode(UaNodeContext context, String nodeId, NodeId dataType, String displayName) {
+    private UaVariableNode createSimpleVariableNode(UaNodeContext context, String nodeId, NodeId dataType,
+            String displayName) {
         UaVariableNode node = new UaVariableNode.UaVariableNodeBuilder(context)
                 .setNodeId(newNodeId(nodeId))
                 .setAccessLevel(AccessLevel.READ_WRITE)
@@ -180,7 +183,7 @@ public class CustomNamespace extends ManagedNamespace {
 
     private void loadAllJsonData() throws Exception {
         JSONParser parser = new JSONParser();
-        
+
         // Load all component property data using SystemConfig
         for (SystemConfig.ComponentProperty prop : SystemConfig.COMPONENT_PROPERTIES) {
             JSONArray dataArray = (JSONArray) parser.parse(new FileReader(prop.jsonFile));
@@ -191,7 +194,7 @@ public class CustomNamespace extends ManagedNamespace {
     private void addAllNodesToFolder() {
         // Add system properties
         systemProperties.values().forEach(node -> addNodeToFolder(node));
-        
+
         // Add quantity nodes
         addNodeToFolder(robotQuantity);
         addNodeToFolder(inputConveyorQuantity);
@@ -202,14 +205,14 @@ public class CustomNamespace extends ManagedNamespace {
     // =====================================================================
     private RobotTemplate createRobotImmediate(UaNodeContext context, int robotNumber) {
         List<UaVariableNode> robotNodes = new ArrayList<>();
-        
+
         // Create all robot nodes using SystemConfig like we designed
         for (SystemConfig.RobotConfig attr : SystemConfig.ROBOTS) {
             String nodeId = attr.getNodeId(robotNumber);
             String displayName = "Robot " + robotNumber + " " + attr.displayName;
-            
+
             UaVariableNode node = createSimpleVariableNode(context, nodeId, attr.dataType, displayName);
-            
+
             // Handle special default values based on attribute name
             Object defaultValue = attr.defaultValue;
             if ("location".equals(attr.name)) {
@@ -217,7 +220,7 @@ public class CustomNamespace extends ManagedNamespace {
             } else if ("priority".equals(attr.name)) {
                 defaultValue = SystemConfig.NUM_ROBOTS + 1 - robotNumber;
             }
-            
+
             node.setValue(new DataValue(new Variant(defaultValue)));
             addNodeToFolderImmediate(context, node);
             robotNodes.add(node);
@@ -225,9 +228,8 @@ public class CustomNamespace extends ManagedNamespace {
 
         // Return robot with all nodes using SystemConfig order
         return new RobotTemplate(
-            robotNodes.get(0), robotNodes.get(1), robotNodes.get(2), robotNodes.get(3), robotNodes.get(4),
-            robotNodes.get(5), robotNodes.get(6), robotNodes.get(7), robotNodes.get(8)
-        );
+                robotNodes.get(0), robotNodes.get(1), robotNodes.get(2), robotNodes.get(3), robotNodes.get(4),
+                robotNodes.get(5), robotNodes.get(6), robotNodes.get(7), robotNodes.get(8), robotNodes.get(9));
     }
 
     private ConveyorAgent createInputConveyorImmediate(UaNodeContext context, int conveyorNumber) {
@@ -236,92 +238,33 @@ public class CustomNamespace extends ManagedNamespace {
         SystemConfig.ConveyorConfig producedAttr = SystemConfig.INPUT_CONVEYORS[0]; // "produced" attribute
         String producedNodeId = producedAttr.getNodeId("InputConveyor", conveyorNumber);
         String producedDisplayName = "Input Conveyor " + conveyorNumber + " " + producedAttr.displayName;
-        
-        UaVariableNode produced = createSimpleVariableNode(context, producedNodeId, producedAttr.dataType, producedDisplayName);
+
+        UaVariableNode produced = createSimpleVariableNode(context, producedNodeId, producedAttr.dataType,
+                producedDisplayName);
         produced.setValue(new DataValue(new Variant(producedAttr.defaultValue)));
         addNodeToFolderImmediate(context, produced);
-        
+
         // Create "enabled" node
         SystemConfig.ConveyorConfig enabledAttr = SystemConfig.INPUT_CONVEYORS[1]; // "enabled" attribute
         String enabledNodeId = enabledAttr.getNodeId("InputConveyor", conveyorNumber);
         String enabledDisplayName = "Input Conveyor " + conveyorNumber + " " + enabledAttr.displayName;
-        
-        UaVariableNode enabled = createSimpleVariableNode(context, enabledNodeId, enabledAttr.dataType, enabledDisplayName);
+
+        UaVariableNode enabled = createSimpleVariableNode(context, enabledNodeId, enabledAttr.dataType,
+                enabledDisplayName);
         enabled.setValue(new DataValue(new Variant(enabledAttr.defaultValue)));
         addNodeToFolderImmediate(context, enabled);
-        
-        return new ConveyorAgent(produced, enabled, conveyorNumber);
-    }
 
-    // =====================================================================
-    // NODE CREATION HELPERS - Reusable and clean
-    // =====================================================================
-    private UaVariableNode createRobotAttributeNode(SystemConfig.RobotConfig attr, int robotNumber) {
-        String displayName = "Robot " + robotNumber + " " + attr.displayName;
-        String nodeId = attr.getNodeId(robotNumber);
-        
-        // Handle special default values based on attribute name
-        Object defaultValue = attr.defaultValue;
-        if ("location".equals(attr.name)) {
-            defaultValue = "empty" + robotNumber;
-        } else if ("priority".equals(attr.name)) {
-            defaultValue = SystemConfig.NUM_ROBOTS + 1 - robotNumber;
-        }
-        
-        UaVariableNode node = createUaVariableNode(
-            newNodeId(nodeId), 
-            AccessLevel.READ_WRITE, AccessLevel.READ_WRITE, 
-            attr.dataType, 
-            displayName, 
-            "Updating the " + displayName, 
-            "Get the " + displayName
-        );
-        
-        node.setValue(new DataValue(new Variant(defaultValue)));
-        return node;
-    }
+        // Create "trustScore" node
+        SystemConfig.ConveyorConfig trustScoreAttr = SystemConfig.INPUT_CONVEYORS[4]; // "trustScore" attribute
+        String trustScoreNodeId = trustScoreAttr.getNodeId("InputConveyor", conveyorNumber);
+        String trustScoreDisplayName = "Input Conveyor " + conveyorNumber + " " + trustScoreAttr.displayName;
 
-    private UaVariableNode createInputConveyorAttributeNode(SystemConfig.ConveyorConfig attr, int conveyorNumber) {
-        String displayName = "Input Conveyor " + conveyorNumber + " " + attr.displayName;
-        String nodeId = attr.getNodeId("InputConveyor", conveyorNumber);
-        
-        UaVariableNode node = createUaVariableNode(
-            newNodeId(nodeId),
-            AccessLevel.READ_WRITE,
-            AccessLevel.READ_WRITE,
-            attr.dataType,
-            displayName,
-            "Updating " + displayName,
-            "Get " + displayName
-        );
-        
-        node.setValue(new DataValue(new Variant(attr.defaultValue)));
-        return node;
-    }
-    
-    private UaVariableNode createComponentPropertyNode(SystemConfig.ComponentProperty prop) {
-        return createUaVariableNode(
-            newNodeId(prop.nodeId), 
-            AccessLevel.READ_WRITE, AccessLevel.READ_WRITE, 
-            Identifiers.String, 
-            prop.name, 
-            "Updating the " + prop.name, 
-            "Get the " + prop.name
-        );
-    }
+        UaVariableNode trustScore = createSimpleVariableNode(context, trustScoreNodeId, trustScoreAttr.dataType,
+                trustScoreDisplayName);
+        trustScore.setValue(new DataValue(new Variant(trustScoreAttr.defaultValue)));
+        addNodeToFolderImmediate(context, trustScore);
 
-    private UaVariableNode createQuantityNode(String name, int value) {
-        UaVariableNode node = createUaVariableNode(
-            newNodeId(name + "-unique-identifier"), 
-            AccessLevel.READ_WRITE, AccessLevel.READ_WRITE, 
-            Identifiers.Int32, 
-            name, 
-            "Updating " + name, 
-            "Get " + name
-        );
-        
-        node.setValue(new DataValue(new Variant(value)));
-        return node;
+        return new ConveyorAgent(produced, enabled, trustScore, conveyorNumber);
     }
 
     // =====================================================================
@@ -344,7 +287,8 @@ public class CustomNamespace extends ManagedNamespace {
             for (RobotTemplate robot : robots) {
 
                 int batteryLevel = robot.getBatteryLevel();
-                if (batteryLevel <= 0) continue;
+                if (batteryLevel <= 0)
+                    continue;
 
                 int newBattery = batteryLevel;
 
@@ -352,12 +296,12 @@ public class CustomNamespace extends ManagedNamespace {
                 if (robot.isEnabled() && !robot.isStop()) {
 
                     // Larger battery drain when moving
-                    newBattery -= 2;  // or any realistic value
+                    newBattery -= 2; // or any realistic value
                 } else {
                     // Minimal idle battery drain
                     newBattery -= 0.1; // if you support decimals
                     // or:
-                    // newBattery -= 1;  // very small drain if only integers allowed
+                    // newBattery -= 1; // very small drain if only integers allowed
                 }
 
                 // Ensure battery doesn’t go negative
@@ -367,7 +311,6 @@ public class CustomNamespace extends ManagedNamespace {
             }
         }, 0, 5, TimeUnit.SECONDS);
     }
-
 
     // =====================================================================
     // OPC-UA INFRASTRUCTURE - Required overrides
@@ -396,10 +339,10 @@ public class CustomNamespace extends ManagedNamespace {
     // =====================================================================
     // NODE CREATION UTILITY - Clean and reusable
     // =====================================================================
-    public UaVariableNode createUaVariableNode(NodeId nodeId, ImmutableSet<AccessLevel> accessLevel, 
-            ImmutableSet<AccessLevel> userAccessLevel, NodeId dataType, String qualifiedName, 
+    public UaVariableNode createUaVariableNode(NodeId nodeId, ImmutableSet<AccessLevel> accessLevel,
+            ImmutableSet<AccessLevel> userAccessLevel, NodeId dataType, String qualifiedName,
             String displayName, String description) {
-        
+
         UaVariableNode node = new UaVariableNode.UaVariableNodeBuilder(getNodeContext())
                 .setNodeId(nodeId)
                 .setAccessLevel(accessLevel)
@@ -412,7 +355,7 @@ public class CustomNamespace extends ManagedNamespace {
                 .setValueRank(-1)
                 .setArrayDimensions(null)
                 .build();
-        
+
         return node;
     }
 
@@ -422,7 +365,7 @@ public class CustomNamespace extends ManagedNamespace {
     public static List<ConveyorAgent> getInputConveyors() {
         return inputConveyors;
     }
-    
+
     public static List<RobotTemplate> getRobots() {
         return robots;
     }
