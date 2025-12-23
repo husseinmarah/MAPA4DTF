@@ -18,6 +18,7 @@ import java.util.concurrent.ExecutionException;
 
 @RestController
 @RequestMapping("/api/v1")
+@CrossOrigin(origins = "*")
 public class RobotController {
 
     private final OpcUaClient opcUaClient;
@@ -115,40 +116,13 @@ public class RobotController {
         Object scoreObj = payload.get("score");
         double score = scoreObj instanceof Integer ? ((Integer) scoreObj).doubleValue() : (Double) scoreObj;
 
-        // 1. Update SharedTrustScoreService
+        // 1. Update SharedTrustScoreService (for immediate UI feedback)
         SharedTrustScoreService.updateTrustScore(agentName, score);
 
-        // 2. Update OPC-UA Node
-        if (agentName.startsWith("Robot")) {
-            try {
-                // Extract robot number from name, e.g. "Robot1" -> 1
-                // Assuming name format "Robot<N>"
-                String numStr = agentName.replace("Robot", "");
-                // Handle cases where name might be "RobotAgent1"
-                numStr = numStr.replace("Agent", "");
-
-                int robotNum = Integer.parseInt(numStr);
-                if (robotNum > 0 && robotNum <= CustomNamespace.getRobots().size()) {
-                    CustomNamespace.getRobots().get(robotNum - 1).setTrustScore(score);
-                }
-            } catch (NumberFormatException e) {
-                System.err.println("Could not parse robot number from agent name: " + agentName);
-            }
-        } else if (agentName.startsWith("Conveyor")) {
-            try {
-                // Extract conveyor number from name, e.g. "Conveyor1" -> 1
-                String numStr = agentName.replace("Conveyor", "");
-                // Handle cases where name might be "ConveyorAgent1"
-                numStr = numStr.replace("Agent", "");
-
-                int conveyorNum = Integer.parseInt(numStr);
-                if (conveyorNum > 0 && conveyorNum <= CustomNamespace.getInputConveyors().size()) {
-                    CustomNamespace.getInputConveyors().get(conveyorNum - 1).setTrustScore(score);
-                }
-            } catch (NumberFormatException e) {
-                System.err.println("Could not parse conveyor number from agent name: " + agentName);
-            }
-        }
+        // 2. Update Keycloak (which propagates to OPA policy via token/attributes)
+        // This replaces the direct OPC-UA node update.
+        // The OPC-UA "Enabled" status will react to this change via OPA policy checks.
+        milo.security.FederationSecurityManager.getInstance().updateAgentTrustScore(agentName, score);
     }
 
     private String readStringValue(String nodeId) throws ExecutionException, InterruptedException {
