@@ -16,28 +16,29 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * OPA (Open Policy Agent) Client
- * 
+ * <p>
  * Integrates with OPA to enforce authorization policies defined in policy.rego.
  * Evaluates policy decisions for agent communications, federation access, and resource usage.
  */
 public class OPAClient {
-    
+
     private final String opaUrl;
     private final OkHttpClient httpClient;
     private static final String DEFAULT_OPA_URL = "http://localhost:8181/v1/data/authz/allow";
 
     private java.util.Map<String, String> componentRoles;
     private JSONArray federationRules;
-    
+
     /**
      * Create OPA client with default URL
      */
     public OPAClient() {
         this(DEFAULT_OPA_URL);
     }
-    
+
     /**
      * Create OPA client with custom URL
+     *
      * @param opaUrl URL to OPA policy evaluation endpoint
      */
     public OPAClient(String opaUrl) {
@@ -47,7 +48,7 @@ public class OPAClient {
                 .readTimeout(5, TimeUnit.SECONDS)
                 .writeTimeout(5, TimeUnit.SECONDS)
                 .build();
-        
+
         loadFederationConfig();
     }
 
@@ -63,7 +64,7 @@ public class OPAClient {
                 federationRules = new JSONArray();
                 return;
             }
-            
+
             JSONObject config = (JSONObject) parser.parse(new InputStreamReader(is));
             componentRoles = (java.util.Map<String, String>) config.get("component_roles");
             federationRules = (JSONArray) config.get("federation_rules");
@@ -77,30 +78,30 @@ public class OPAClient {
             federationRules = new JSONArray();
         }
     }
-    
+
     /**
      * Evaluate policy for agent communication
-     * 
-     * @param senderName Agent name sending the message
-     * @param senderOrg Organization of sender
-     * @param senderRole Role of sender
+     *
+     * @param senderName       Agent name sending the message
+     * @param senderOrg        Organization of sender
+     * @param senderRole       Role of sender
      * @param senderTrustScore Trust score of sender
-     * @param senderStatus Status of sender (active/blocked)
-     * @param receiverName Agent name receiving the message
-     * @param receiverOrg Organization of receiver
-     * @param receiverStatus Status of receiver (active/blocked)
-     * @param action Action being performed (e.g., "send")
+     * @param senderStatus     Status of sender (active/blocked)
+     * @param receiverName     Agent name receiving the message
+     * @param receiverOrg      Organization of receiver
+     * @param receiverStatus   Status of receiver (active/blocked)
+     * @param action           Action being performed (e.g., "send")
      * @return PolicyDecision with allow/deny and reason
      */
     public PolicyDecision evaluateCommunicationPolicy(
             String senderName, String senderOrg, String senderRole, double senderTrustScore, String senderStatus,
             String receiverName, String receiverOrg, String receiverRole, double receiverTrustScore, String receiverStatus, String action) {
-        
+
         try {
             // Build OPA input JSON
             JSONObject input = new JSONObject();
             input.put("action", action);
-            
+
             JSONObject sender = new JSONObject();
             sender.put("name", senderName);
             sender.put("org", senderOrg);
@@ -108,7 +109,7 @@ public class OPAClient {
             sender.put("trustScore", senderTrustScore);
             sender.put("status", senderStatus);
             input.put("sender", sender);
-            
+
             JSONObject receiver = new JSONObject();
             receiver.put("name", receiverName);
             receiver.put("org", receiverOrg);
@@ -116,21 +117,21 @@ public class OPAClient {
             receiver.put("trustScore", receiverTrustScore);
             receiver.put("status", receiverStatus);
             input.put("receiver", receiver);
-            
+
             JSONObject requestBody = new JSONObject();
             requestBody.put("input", input);
-            
+
             // Send request to OPA
             RequestBody body = RequestBody.create( // This is an okhttp3.RequestBody
-                requestBody.toString(),
-                MediaType.parse("application/json")
+                    requestBody.toString(),
+                    MediaType.parse("application/json")
             );
-            
+
             Request request = new Request.Builder()
                     .url(opaUrl)
                     .post(body)
                     .build();
-            
+
             try (Response response = httpClient.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
                     System.err.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
@@ -141,40 +142,42 @@ public class OPAClient {
                     System.err.println("└──────────────────────────────────────────────────");
                     return new PolicyDecision(false, "OPA service error", null);
                 }
-                
+
                 String responseBody = response.body().string();
                 org.json.JSONObject jsonResponse = new org.json.JSONObject(responseBody);
-                
+
                 boolean allowed = jsonResponse.optBoolean("result", false); // Using org.json.JSONObject here
-                
-                String reason = allowed ? 
-                    "OPA policy allows communication" : 
-                    "OPA policy denies communication";
 
+                String reason = allowed ?
+                        "OPA policy allows communication" :
+                        "OPA policy denies communication";
 
-                // Print detailed OPA policy evaluation box
-                System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
-                System.out.println("│  " + (allowed ? "✅ ALLOWED" : "❌ DENIED"));
-                System.out.println("│  --- SOURCE ---");
-                System.out.println("│  Time:        " + Instant.now());
-                System.out.println("│  From:        " + senderName + " (" + senderOrg + ")");
-                System.out.println("│  To:          " + receiverName + " (" + receiverOrg + ")");
-                System.out.println("│  Role:        " + senderRole);
-                System.out.println("│  Trust Score: " + senderTrustScore);
-                System.out.println("│  Source FFA:  " + FederationHelper.getAgentFFA(senderName));
-                System.out.println("│  --- TARGET ---"); 
-                System.out.println("│  Target FFA:  " + FederationHelper.getAgentFFA(receiverName));
-                
-                // Determine and add federation type
-                String federationType = determineFederationType(FederationHelper.getAgentFFA(senderName), FederationHelper.getAgentFFA(receiverName));
-                System.out.println("│  Federation:  " + federationType);
+                if (senderName.equals(receiverName)) {
+                    assert true; // Skip self-communication logging
+                } else {
+                    // Print detailed OPA policy evaluation box
+                    System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
+                    System.out.println("│  " + (allowed ? "✅ ALLOWED" : "❌ DENIED"));
+                    System.out.println("│  --- SOURCE ---");
+                    System.out.println("│  Time:        " + Instant.now());
+                    System.out.println("│  From:        " + senderName + " (" + senderOrg + ")");
+                    System.out.println("│  To:          " + receiverName + " (" + receiverOrg + ")");
+                    System.out.println("│  Role:        " + senderRole);
+                    System.out.println("│  Trust Score: " + senderTrustScore);
+                    System.out.println("│  Source FFA:  " + FederationHelper.getAgentFFA(senderName));
+                    System.out.println("│  --- TARGET ---");
+                    System.out.println("│  Target FFA:  " + FederationHelper.getAgentFFA(receiverName));
 
-                System.out.println("│  Reason: " + reason);
-                System.out.println("└──────────────────────────────────────────────────");
-                
+                    // Determine and add federation type
+                    String federationType = determineFederationType(FederationHelper.getAgentFFA(senderName), FederationHelper.getAgentFFA(receiverName));
+                    System.out.println("│  Federation:  " + federationType);
+
+                    System.out.println("│  Reason: " + reason);
+                    System.out.println("└──────────────────────────────────────────────────");
+                }
                 return new PolicyDecision(allowed, reason, requestBody.toString());
             }
-            
+
         } catch (IOException e) {
             System.err.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
             System.err.println("│  ⚠️ EVALUATION FAILED - " + e.getMessage());
@@ -192,6 +195,7 @@ public class OPAClient {
 
     /**
      * Determines the type of federation (Vertical or Horizontal) based on agent FFAs.
+     *
      * @param sourceFFA The Federation Fractal Address of the source agent.
      * @param targetFFA The Federation Fractal Address of the target agent.
      * @return A string indicating "Vertical", "Horizontal", or "Unknown".
@@ -241,49 +245,49 @@ public class OPAClient {
             return null;
         }
     }
-    
+
     /**
      * Evaluate policy for federation join request
-     * 
-     * @param agentName Name of agent requesting to join
-     * @param agentOrg Organization of agent
-     * @param agentRole Role of agent
+     *
+     * @param agentName       Name of agent requesting to join
+     * @param agentOrg        Organization of agent
+     * @param agentRole       Role of agent
      * @param agentTrustScore Trust score of agent
-     * @param agentStatus Status of agent (active/blocked)
-     * @param federationId Federation ID to join
+     * @param agentStatus     Status of agent (active/blocked)
+     * @param federationId    Federation ID to join
      * @return PolicyDecision with allow/deny and reason
      */
     public PolicyDecision evaluateFederationJoinPolicy(
-            String agentName, String agentOrg, String agentRole, 
+            String agentName, String agentOrg, String agentRole,
             double agentTrustScore, String agentStatus, String federationId) {
-        
+
         return evaluateCommunicationPolicy(
-            agentName, agentOrg, agentRole, agentTrustScore, agentStatus,
-            "FederationManager", federationId, "federation_manager", 1.0, "active", "join_federation"
+                agentName, agentOrg, agentRole, agentTrustScore, agentStatus,
+                "FederationManager", federationId, "federation_manager", 1.0, "active", "join_federation"
         );
     }
-    
+
     /**
      * Evaluate policy for resource allocation
-     * 
-     * @param agentName Name of agent requesting resource
-     * @param agentOrg Organization of agent
-     * @param agentRole Role of agent
+     *
+     * @param agentName       Name of agent requesting resource
+     * @param agentOrg        Organization of agent
+     * @param agentRole       Role of agent
      * @param agentTrustScore Trust score of agent
-     * @param agentStatus Status of agent (active/blocked)
-     * @param resourceType Type of resource requested
+     * @param agentStatus     Status of agent (active/blocked)
+     * @param resourceType    Type of resource requested
      * @return PolicyDecision with allow/deny and reason
      */
     public PolicyDecision evaluateResourceAllocationPolicy(
             String agentName, String agentOrg, String agentRole,
             double agentTrustScore, String agentStatus, String resourceType) {
-        
+
         return evaluateCommunicationPolicy(
-            agentName, agentOrg, agentRole, agentTrustScore, agentStatus,
-            "ResourceManager", "main", "manager", 1.0, "active", "allocate_resource"
+                agentName, agentOrg, agentRole, agentTrustScore, agentStatus,
+                "ResourceManager", "main", "manager", 1.0, "active", "allocate_resource"
         );
     }
-    
+
     /**
      * Evaluate trust score update policy.
      *
@@ -313,8 +317,8 @@ public class OPAClient {
             requestBody.put("input", input);
 
             RequestBody body = RequestBody.create(
-                requestBody.toString(),
-                MediaType.parse("application/json")
+                    requestBody.toString(),
+                    MediaType.parse("application/json")
             );
 
             Request request = new Request.Builder()
@@ -329,7 +333,7 @@ public class OPAClient {
                 }
 
                 String responseBody = response.body().string();
-                
+
                 JSONParser parser = new JSONParser();
                 JSONObject jsonResponse = (JSONObject) parser.parse(responseBody);
 
@@ -343,7 +347,7 @@ public class OPAClient {
                         return Double.parseDouble((String) result);
                     }
                 }
-                
+
                 System.err.println("OPA trust evaluation response did not contain a valid 'result' field.");
                 return currentScore;
 
@@ -359,7 +363,7 @@ public class OPAClient {
 
     /**
      * Check if OPA service is available
-     * 
+     *
      * @return true if OPA is reachable
      */
     public boolean isAvailable() {
@@ -368,7 +372,7 @@ public class OPAClient {
                     .url(opaUrl.replace("/v1/data/authz/allow", "/health"))
                     .get()
                     .build();
-            
+
             try (Response response = httpClient.newCall(request).execute()) {
                 return response.isSuccessful();
             }
@@ -376,7 +380,7 @@ public class OPAClient {
             return false;
         }
     }
-    
+
     /**
      * Policy decision result
      */
@@ -384,19 +388,19 @@ public class OPAClient {
         public final boolean allowed;
         public final String reason;
         public final String policyInput;
-        
+
         public PolicyDecision(boolean allowed, String reason, String policyInput) {
             this.allowed = allowed;
             this.reason = reason;
             this.policyInput = policyInput;
         }
-        
+
         @Override
         public String toString() {
             return "PolicyDecision{allowed=" + allowed + ", reason='" + reason + "'}";
         }
     }
-    
+
     /**
      * Shutdown the HTTP client
      */
