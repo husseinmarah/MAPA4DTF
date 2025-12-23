@@ -1396,7 +1396,7 @@ public class ConveyorAgent extends Agent {
         // Check if robot is already in queue
         for (RobotQueueEntry entry : pickupQueue) {
             if (entry.robotAgent.equals(robotAgent)) {
-                System.out.println("⚠️ " + agentName + " - " + robotAgent + " already in pickup queue");
+                System.out.println("⚠️ " + agentName + " - " + robotAgent + " already in pickup queue (position: " + (new java.util.ArrayList<>(pickupQueue).indexOf(entry) + 1) + ")");
                 return;
             }
         }
