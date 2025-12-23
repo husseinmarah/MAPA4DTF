@@ -296,10 +296,10 @@ public class CustomNamespace extends ManagedNamespace {
                 if (robot.isEnabled() && !robot.isStop()) {
 
                     // Larger battery drain when moving
-                    newBattery -= 2; // or any realistic value
+                    newBattery -= 0.05; // or any realistic value
                 } else {
                     // Minimal idle battery drain
-                    newBattery -= 0.1; // if you support decimals
+                    newBattery -= 0.01; // if you support decimals
                     // or:
                     // newBattery -= 1; // very small drain if only integers allowed
                 }
@@ -309,7 +309,7 @@ public class CustomNamespace extends ManagedNamespace {
 
                 robot.setBatteryLevel(newBattery);
             }
-        }, 0, 5, TimeUnit.SECONDS);
+        }, 0, 30, TimeUnit.SECONDS);
     }
 
     // =====================================================================
