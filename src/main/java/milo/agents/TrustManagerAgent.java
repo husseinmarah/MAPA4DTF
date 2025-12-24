@@ -21,8 +21,11 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TrustManagerAgent extends Agent {
 
     private static double INITIAL_TRUST_SCORE = 0;
+    private static final double TRUST_THRESHOLD = 0.5; // Threshold below which agents are blocked
+    private static final double UNBLOCK_THRESHOLD = 0.7; // Threshold above which blocked agents are unblocked
 
     private Map<String, Double> trustScores = new ConcurrentHashMap<>();
+    private Map<String, String> agentStatuses = new ConcurrentHashMap<>(); // Track current status
     private OPAClient opaClient;
     private milo.security.KeycloakClient keycloakClient;
 
@@ -107,6 +110,9 @@ public class TrustManagerAgent extends Agent {
             // NEW: Update shared service for UI
             milo.web.SharedTrustScoreService.updateTrustScore(agentName, newScore);
 
+            // NEW: Dynamically update agent status based on trust threshold
+            updateAgentStatusBasedOnTrust(agentName, currentScore, newScore);
+
             System.out.println("┌─ TRUST SCORE UPDATE (via OPA) ───────────────────");
             System.out.println("│  ⚖️  AGENT: " + agentName);
             System.out.println("│  OUTCOME: " + outcome);
@@ -146,6 +152,9 @@ public class TrustManagerAgent extends Agent {
             // NEW: Update shared service for UI
             milo.web.SharedTrustScoreService.updateTrustScore(agentName, score);
 
+            // Initialize status as "active" by default
+            agentStatuses.put(agentName, "active");
+
             System.out.println("┌─ INITIAL TRUST SCORE SET ───────────────────────");
             System.out.println("│  AGENT: " + agentName);
             System.out.println(String.format("│  SCORE: %.3f", score));
@@ -153,6 +162,56 @@ public class TrustManagerAgent extends Agent {
 
         } catch (Exception e) {
             System.err.println("❌ " + getLocalName() + " - Error handling initial trust score: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Dynamically update agent status based on trust score thresholds
+     * 
+     * @param agentName Agent to update
+     * @param oldScore Previous trust score
+     * @param newScore New trust score
+     */
+    private void updateAgentStatusBasedOnTrust(String agentName, double oldScore, double newScore) {
+        try {
+            String currentStatus = agentStatuses.getOrDefault(agentName, "active");
+            String newStatus = currentStatus;
+
+            // Check if agent should be blocked (trust dropped below threshold)
+            if (newScore < TRUST_THRESHOLD && "active".equals(currentStatus)) {
+                newStatus = "blocked";
+                boolean success = keycloakClient.updateUserStatus(agentName, newStatus);
+                
+                if (success) {
+                    agentStatuses.put(agentName, newStatus);
+                    System.out.println("┌─ AGENT STATUS CHANGED ────────────────────────────");
+                    System.out.println("│  🚫 AGENT: " + agentName);
+                    System.out.println("│  STATUS: active -> blocked");
+                    System.out.println(String.format("│  REASON: Trust score %.3f < threshold %.3f", newScore, TRUST_THRESHOLD));
+                    System.out.println("└──────────────────────────────────────────────────");
+                } else {
+                    System.err.println("❌ Failed to update status for " + agentName + " in Keycloak");
+                }
+            }
+            // Check if blocked agent should be unblocked (trust recovered)
+            else if (newScore >= UNBLOCK_THRESHOLD && "blocked".equals(currentStatus)) {
+                newStatus = "active";
+                boolean success = keycloakClient.updateUserStatus(agentName, newStatus);
+                
+                if (success) {
+                    agentStatuses.put(agentName, newStatus);
+                    System.out.println("┌─ AGENT STATUS CHANGED ────────────────────────────");
+                    System.out.println("│  ✅ AGENT: " + agentName);
+                    System.out.println("│  STATUS: blocked -> active");
+                    System.out.println(String.format("│  REASON: Trust score %.3f >= threshold %.3f", newScore, UNBLOCK_THRESHOLD));
+                    System.out.println("└──────────────────────────────────────────────────");
+                } else {
+                    System.err.println("❌ Failed to update status for " + agentName + " in Keycloak");
+                }
+            }
+
+        } catch (Exception e) {
+            System.err.println("❌ Error updating agent status: " + e.getMessage());
         }
     }
 

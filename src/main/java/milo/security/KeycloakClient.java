@@ -332,6 +332,69 @@ public class KeycloakClient {
         }
     }
 
+    /**
+     * Updates the status attribute for a user in Keycloak.
+     * This requires admin privileges (e.g., a service account with 'manage-users' role).
+     * 
+     * @param username The username of the agent/user to update.
+     * @param status The new status ("active" or "blocked").
+     * @return true if successful, false otherwise.
+     */
+    public boolean updateUserStatus(String username, String status) {
+        try {
+            String adminToken = getAdminAccessToken();
+            if (adminToken == null) {
+                System.err.println("❌ KeycloakClient: Could not get admin token to update status.");
+                return false;
+            }
+
+            JSONObject user = getUser(username, adminToken);
+            if (user == null) {
+                System.err.println("❌ KeycloakClient: Could not find user for '" + username + "'.");
+                return false;
+            }
+
+            String userId = user.getString("id");
+
+            // Get existing attributes or create new
+            JSONObject attributes = user.optJSONObject("attributes");
+            if (attributes == null) {
+                attributes = new JSONObject();
+            }
+
+            // Update status (must be a list of strings)
+            attributes.put("status", new JSONArray(new String[] { status }));
+
+            // Construct payload with preserved attributes
+            JSONObject payload = new JSONObject();
+            payload.put("attributes", attributes);
+
+            String updateUserUrl = keycloakUrl + "/admin/realms/" + realm + "/users/" + userId;
+
+            RequestBody body = RequestBody.create(payload.toString(), MediaType.get("application/json; charset=utf-8"));
+            Request request = new Request.Builder()
+                    .url(updateUserUrl)
+                    .header("Authorization", "Bearer " + adminToken)
+                    .put(body)
+                    .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    System.err.println("❌ KeycloakClient: Failed to update user status. Response: " + response.code()
+                            + " " + response.body().string());
+                    return false;
+                }
+                System.out.println("✅ KeycloakClient: Successfully updated status for " + username + " to " + status);
+                return true;
+            }
+
+        } catch (Exception e) {
+            System.err.println("❌ KeycloakClient: Error updating status: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     private String getAdminAccessToken() throws IOException {
         // Read client credentials from .env file or environment variables, with a
         // fallback for development.
