@@ -93,9 +93,23 @@ public class TrustManagerAgent extends Agent {
             }
 
             double currentScore = trustScores.getOrDefault(agentName, INITIAL_TRUST_SCORE);
+            double newScore;
 
-            // Delegate trust calculation to OPA with dynamic parameters
-            double newScore = opaClient.evaluateTrustScoreUpdate(currentScore, outcome, 0.10, 0.05);
+            // Check if this is a manual update from dashboard (contains :new-score)
+            String manualScoreStr = extractValue(content, ":new-score");
+            if (manualScoreStr != null && "MANUAL_UPDATE".equals(outcome)) {
+                // Manual update from dashboard - use provided score directly
+                try {
+                    newScore = Double.parseDouble(manualScoreStr.trim());
+                    System.out.println("📊 Manual trust score update from dashboard: " + agentName + " = " + newScore);
+                } catch (NumberFormatException e) {
+                    System.err.println("❌ Invalid manual score format: " + manualScoreStr);
+                    return;
+                }
+            } else {
+                // Automatic update from agent behavior - delegate to OPA
+                newScore = opaClient.evaluateTrustScoreUpdate(currentScore, outcome, 0.10, 0.05);
+            }
 
             trustScores.put(agentName, newScore);
 

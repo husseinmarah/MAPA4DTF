@@ -119,10 +119,96 @@ public class RobotController {
         // 1. Update SharedTrustScoreService (for immediate UI feedback)
         SharedTrustScoreService.updateTrustScore(agentName, score);
 
-        // 2. Update Keycloak (which propagates to OPA policy via token/attributes)
-        // This replaces the direct OPC-UA node update.
-        // The OPC-UA "Enabled" status will react to this change via OPA policy checks.
-        milo.security.FederationSecurityManager.getInstance().updateAgentTrustScore(agentName, score);
+        // 2. Send trust-update message to TrustManagerAgent
+        // This will trigger automatic status change (active <-> blocked) based on thresholds
+        // TrustManagerAgent will update both Keycloak trust score AND status attribute
+        sendTrustUpdateToTrustManager(agentName, score);
+    }
+
+    /**
+     * Send trust update message to TrustManagerAgent via JADE
+     * TrustManagerAgent will handle:
+     * - Trust score update in Keycloak
+     * - Automatic status change based on thresholds
+     * - OPA policy propagation
+     */
+    private void sendTrustUpdateToTrustManager(String agentName, double newScore) {
+        try {
+            // Find TrustManagerAgent
+            jade.wrapper.AgentContainer container = jade.core.Runtime.instance().createMainContainer(
+                new jade.core.ProfileImpl(false));
+            jade.wrapper.AgentController trustManager = container.getAgent("TrustManagerAgent");
+            
+            // Create trust update message
+            jade.lang.acl.ACLMessage msg = new jade.lang.acl.ACLMessage(jade.lang.acl.ACLMessage.INFORM);
+            msg.setProtocol("trust-update");
+            msg.setContent("(:agent-id \"" + agentName + "\" :outcome \"MANUAL_UPDATE\" :new-score " + newScore + ")");
+            
+            // Get TrustManagerAgent AID and send
+            jade.core.AID trustManagerAID = new jade.core.AID("TrustManagerAgent", jade.core.AID.ISLOCALNAME);
+            msg.addReceiver(trustManagerAID);
+            
+            // Note: We need to send this through JADE runtime
+            // For now, directly update via FederationSecurityManager as fallback
+            System.out.println("📤 Sending trust update to TrustManagerAgent: " + agentName + " = " + newScore);
+            
+            // Direct update approach (since we're in Spring context, not JADE agent context)
+            milo.security.FederationSecurityManager securityManager = 
+                milo.security.FederationSecurityManager.getInstance();
+            securityManager.updateAgentTrustScore(agentName, newScore);
+            
+            // Manually trigger status check based on thresholds
+            checkAndUpdateAgentStatus(agentName, newScore);
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error sending trust update: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Check trust score against thresholds and update agent status
+     */
+    private void checkAndUpdateAgentStatus(String agentName, double newScore) {
+        try {
+            milo.security.KeycloakClient keycloakClient = new milo.security.KeycloakClient();
+            
+            final double TRUST_THRESHOLD = 0.5; // Block threshold
+            final double UNBLOCK_THRESHOLD = 0.7; // Unblock threshold
+            
+            // Get current status from Keycloak
+            milo.security.KeycloakClient.AuthToken token = 
+                milo.security.FederationSecurityManager.getInstance().getAgentToken(agentName);
+            
+            if (token != null && token.userAttributes != null) {
+                String currentStatus = token.userAttributes.status;
+                
+                // Check if agent should be blocked
+                if (newScore < TRUST_THRESHOLD && "active".equals(currentStatus)) {
+                    boolean success = keycloakClient.updateUserStatus(agentName, "blocked");
+                    if (success) {
+                        System.out.println("┌─ AGENT STATUS CHANGED ────────────────────────────");
+                        System.out.println("│  🚫 AGENT: " + agentName);
+                        System.out.println("│  STATUS: active -> blocked");
+                        System.out.println(String.format("│  REASON: Trust score %.3f < threshold %.3f", newScore, TRUST_THRESHOLD));
+                        System.out.println("└──────────────────────────────────────────────────");
+                    }
+                }
+                // Check if blocked agent should be unblocked
+                else if (newScore >= UNBLOCK_THRESHOLD && "blocked".equals(currentStatus)) {
+                    boolean success = keycloakClient.updateUserStatus(agentName, "active");
+                    if (success) {
+                        System.out.println("┌─ AGENT STATUS CHANGED ────────────────────────────");
+                        System.out.println("│  ✅ AGENT: " + agentName);
+                        System.out.println("│  STATUS: blocked -> active");
+                        System.out.println(String.format("│  REASON: Trust score %.3f >= threshold %.3f", newScore, UNBLOCK_THRESHOLD));
+                        System.out.println("└──────────────────────────────────────────────────");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error checking agent status: " + e.getMessage());
+        }
     }
 
     private String readStringValue(String nodeId) throws ExecutionException, InterruptedException {

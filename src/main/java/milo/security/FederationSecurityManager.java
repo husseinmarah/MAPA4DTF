@@ -839,6 +839,16 @@ public class FederationSecurityManager {
         }
     }
 
+    /**
+     * Get the authentication token for an agent
+     * 
+     * @param agentName The name of the agent
+     * @return The agent's AuthToken or null if not found
+     */
+    public KeycloakClient.AuthToken getAgentToken(String agentName) {
+        return agentTokens.get(agentName);
+    }
+
     // ========== Private Helper Methods ==========
 
     /**
