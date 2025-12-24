@@ -51,8 +51,8 @@ public class RobotAgent extends Agent {
     private static final boolean USE_PRIORITY_RESOLUTION = true; // Enable priority-based task assignment
 
     // Contract Net Protocol State Tracking
-    private java.util.Set<String> activeProposals = new java.util.HashSet<>(); // Track conversation IDs of sent
-                                                                               // proposals
+    private java.util.Set<String> activeProposals = new java.util.HashSet<>(); // Track conversation IDs of sent proposals
+    int taskId = 0; // Unique task ID generator for proposals
 
     // Location tracking for conveyor exit notification
     private String previousLocation = ""; // Track previous location to detect when robot leaves conveyor area
@@ -1571,6 +1571,7 @@ public class RobotAgent extends Agent {
                 String senderName = accept.getSender().getLocalName();
                 String content = accept.getContent();
                 String location = extractValue(content, ":location");
+                taskId = Integer.parseInt(extractValue(content, ":task-id"));
 
                 System.out.println("┌─ TASK ACCEPTED (BID WON) ────────────────────────");
                 System.out.println("│  ✅ TASK ASSIGNED");
@@ -2126,8 +2127,6 @@ public class RobotAgent extends Agent {
 
     /**
      * Report task completion to ProductionAgentManager for load balancing
-     * This helps the manager track which robots are active and assign tasks to idle
-     * robots
      */
     private void reportTaskCompletionToManager() {
         try {
@@ -2135,7 +2134,7 @@ public class RobotAgent extends Agent {
             AID productionManager = null;
             DFAgentDescription template = new DFAgentDescription();
             ServiceDescription sd = new ServiceDescription();
-            sd.setType("production-management");
+            sd.setType("ManufacturingCoordination");
             template.addServices(sd);
 
             try {
@@ -2161,6 +2160,7 @@ public class RobotAgent extends Agent {
                             ":agent-id \"" + getLocalName() + "\" " +
                             ":robot-id \"" + robotId + "\" " +
                             ":timestamp \"" + new java.util.Date() + "\" " +
+                            ":task-id \"" + taskId + "\" " +
                             ":status \"COMPLETED\" " +
                             ":location \"" + (myRobot != null ? myRobot.getLocation() : "UNKNOWN") + "\")");
 

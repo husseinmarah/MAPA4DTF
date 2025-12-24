@@ -14,6 +14,8 @@ import milo.federation.FederationHelper;
 import milo.security.FederationSecurityManager;
 import milo.security.FederationSecurityManager.SecurityContext;
 import milo.utils.DelayUtils;
+import milo.utils.Helper;
+
 import org.eclipse.milo.opcua.sdk.server.nodes.UaVariableNode;
 import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue;
 import org.eclipse.milo.opcua.stack.core.types.builtin.Variant;
@@ -21,6 +23,7 @@ import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 
 import java.util.Iterator;
+import java.util.Random;
 
 /**
  * Template-configurable Conveyor Agent with Federation Support
@@ -515,10 +518,9 @@ public class ConveyorAgent extends Agent {
 
             System.out.println("Searching for TrustManagerAgent...");
             DFAgentDescription[] results = DFService.search(this, template);
-            System.out.println("Found " + results.length + " results.");
 
             if (results.length > 0) {
-                System.out.println("TrustManagerAgent found: " + results[0].getName());
+                System.out.println("TrustManagerAgent Found: " + results[0].getName());
                 AID trustManager = results[0].getName();
 
                 if (trustManager == null) {
@@ -779,7 +781,7 @@ public class ConveyorAgent extends Agent {
      * Conveyor Production Command Handler - Handles production commands from
      * ProductionAgentManager
      */
-    private class ConveyorProductionCommandHandler extends jade.core.behaviours.CyclicBehaviour {
+    private class ConveyorProductionCommandHandler extends CyclicBehaviour {
         @Override
         public void action() {
             MessageTemplate mt = MessageTemplate.and(
@@ -1233,8 +1235,9 @@ public class ConveyorAgent extends Agent {
                 // Send ACCEPT-PROPOSAL to winner
                 ACLMessage accept = winner.originalMessage.createReply();
                 accept.setPerformative(ACLMessage.ACCEPT_PROPOSAL);
+                int currentPickupTaskId = Helper.getNextInt(1000, 9999);
                 accept.setContent("(TaskAccepted :conveyor \"" + getLocalName() + "\" :location \"InputConveyor #"
-                        + conveyorId + "\")");
+                        + conveyorId + "\" :task-id \"" + currentPickupTaskId + "\")");
                 myAgent.send(accept);
 
                 System.out.println("✅ " + getLocalName() + " sent ACCEPT to " + winner.robotAgent);

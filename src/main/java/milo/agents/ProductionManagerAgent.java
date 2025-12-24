@@ -137,11 +137,13 @@ public class ProductionManagerAgent extends Agent {
         addBehaviour(new AgentRegistrationHandler());
         addBehaviour(new TaskAssignmentHandler());
         addBehaviour(new AcknowledgementHandler());
-        addBehaviour(new TaskCompletionReportHandler()); // NEW: Handle completion reports
+        // addBehaviour(new TaskCompletionReportHandler()); // NEW: Handle completion
+        // reports
         addBehaviour(new HeartbeatMonitor(this, 10000));
         addBehaviour(new ProductionCoordinationBehaviour(this, 3000)); // 3 seconds for very fast task distribution
 
-        // Add delayed behavior to log OPA authorization summary after agents have authenticated
+        // Add delayed behavior to log OPA authorization summary after agents have
+        // authenticated
         addBehaviour(new jade.core.behaviours.WakerBehaviour(this, 8000) {
             @Override
             protected void onWake() {
@@ -158,13 +160,15 @@ public class ProductionManagerAgent extends Agent {
     private void initializeFederation() {
         try {
             // Request FFA allocation for management role
-            myFFA = FederationHelper.requestFFAAllocation(this, "ProductionManager", 1, "ProductionCoordination.Primary");
+            myFFA = FederationHelper.requestFFAAllocation(this, "ProductionManager", 1,
+                    "ProductionCoordination.Primary");
 
             if (myFFA != null) {
                 federationEnabled = true;
                 // Initialize hierarchical federation workflow
                 FederationHelper.initializeFederationWorkflow(
-                        this, "hierarchical-federation", "EU/Plant7", "Manufacturing", "ProductionCoordination.Primary");
+                        this, "hierarchical-federation", "EU/Plant7", "Manufacturing",
+                        "ProductionCoordination.Primary");
             }
 
         } catch (Exception e) {
@@ -274,6 +278,7 @@ public class ProductionManagerAgent extends Agent {
 
     /**
      * Sends the initial trust score to the TrustManagerAgent.
+     * 
      * @param score The initial trust score.
      */
     private void reportInitialTrustScore(double score) {
@@ -294,17 +299,21 @@ public class ProductionManagerAgent extends Agent {
                 msg.setProtocol("initial-trust-score");
                 msg.setContent("(:agent-id \"" + getLocalName() + "\" :score " + score + ")");
                 send(msg);
-                System.out.println("📈 " + getLocalName() + " - Reported initial trust score: " + score +", Receiver: " + trustManager);
+                System.out.println("📈 " + getLocalName() + " - Reported initial trust score: " + score + ", Receiver: "
+                        + trustManager);
             } else {
-                System.err.println("⚠️ " + getLocalName() + " - TrustManagerAgent not found in DF. Cannot report initial trust score.");
+                System.err.println("⚠️ " + getLocalName()
+                        + " - TrustManagerAgent not found in DF. Cannot report initial trust score.");
             }
         } catch (Exception e) {
-            System.err.println("❌ " + getAID().getLocalName() + " - Error reporting initial trust score: " + e.getMessage());
+            System.err.println(
+                    "❌ " + getAID().getLocalName() + " - Error reporting initial trust score: " + e.getMessage());
         }
     }
 
     /**
      * Sends a trust update message to the TrustManagerAgent.
+     * 
      * @param outcome The outcome of the task, e.g., "SUCCESS" or "FAILURE".
      */
     private void sendTrustUpdate(String outcome) {
@@ -352,8 +361,7 @@ public class ProductionManagerAgent extends Agent {
         public void action() {
             MessageTemplate mt = MessageTemplate.and(
                     MessageTemplate.MatchPerformative(ACLMessage.INFORM),
-                    MessageTemplate.MatchProtocol("agent-registration")
-            );
+                    MessageTemplate.MatchProtocol("agent-registration"));
 
             ACLMessage msg = receive(mt);
             if (msg != null) {
@@ -420,8 +428,7 @@ public class ProductionManagerAgent extends Agent {
         public void action() {
             MessageTemplate mt = MessageTemplate.and(
                     MessageTemplate.MatchPerformative(ACLMessage.REQUEST),
-                    MessageTemplate.MatchProtocol("task-assignment")
-            );
+                    MessageTemplate.MatchProtocol("task-assignment"));
 
             ACLMessage msg = receive(mt);
             if (msg != null) {
@@ -471,10 +478,9 @@ public class ProductionManagerAgent extends Agent {
     private class AcknowledgementHandler extends CyclicBehaviour {
         @Override
         public void action() {
-            MessageTemplate mt = MessageTemplate.and(
-                    MessageTemplate.MatchPerformative(ACLMessage.INFORM),
-                    MessageTemplate.MatchProtocol("acknowledgement")
-            );
+            MessageTemplate mt = MessageTemplate.and((MessageTemplate.MatchPerformative(ACLMessage.INFORM)),
+                    MessageTemplate.or(MessageTemplate.MatchProtocol("task-completion-report"),
+                            MessageTemplate.MatchProtocol("acknowledgement")));
 
             ACLMessage msg = receive(mt);
             if (msg != null) {
@@ -485,6 +491,7 @@ public class ProductionManagerAgent extends Agent {
         }
 
         private void handleAcknowledgement(ACLMessage msg) {
+            System.out.println("PRINT: " + msg.getContent());
             try {
                 String content = msg.getContent();
                 AID senderAID = msg.getSender();
@@ -494,19 +501,17 @@ public class ProductionManagerAgent extends Agent {
                 if (agentStatus != null) {
                     agentStatus.lastHeartbeat = System.currentTimeMillis();
 
-                    // CRITICAL FIX: Parse status from heartbeat and update the agent's state
+                    // Parse status from heartbeat and update the agent's state
                     String reportedStatus = extractValue(content, ":status");
                     if (reportedStatus != null && !reportedStatus.isEmpty()) {
                         agentStatus.status = reportedStatus;
                     }
 
-                    // NEW: Track products produced by conveyors
+                    // Track products produced by conveyors
                     if ("PRODUCING".equals(reportedStatus) && "CONVEYOR".equals(agentStatus.agentType)) {
                         agentStatus.productsProduced++;
                     }
                 }
-
-                System.out.println("💓 [" + myAgent.getLocalName() + "] Received Heartbeat from " + senderAID.getLocalName() + " - Status: " + (agentStatus != null ? agentStatus.status : "UNKNOWN") + " - Content: " + content);
 
                 // Handle different acknowledgement types
                 if (content.contains("TaskStarted")) {
@@ -515,19 +520,19 @@ public class ProductionManagerAgent extends Agent {
                     handleTaskCompletionAck(senderAID, content);
                 } else if (content.contains("TaskFailed")) {
                     handleTaskFailureAck(senderAID, content);
-                } else if (content.contains("TaskCompleted") && "ROBOT".equals(agentStatus.agentType)) {
-                    // NEW: Increment completed tasks for robots from their heartbeats/acks
-                    if (agentStatus != null) {
-                        agentStatus.completedTasks++;
-                    }
                 } else if (content.contains("StatusUpdate")) {
                     handleStatusUpdateAck(senderAID, content);
                 } else if (content.contains("Heartbeat")) {
                     handleHeartbeatAck(senderAID, content);
+                    System.out.println("💓 [" + myAgent.getLocalName() + "] Received Heartbeat from "
+                            + senderAID.getLocalName() + " - Status: "
+                            + (agentStatus != null ? agentStatus.status : "UNKNOWN") + " - Content: " + content);
+                    return; // Heartbeat handled, no further processing needed
                 }
 
             } catch (Exception e) {
-                System.err.println("[" + myAgent.getLocalName() + "] Error handling acknowledgement: " + e.getMessage());
+                System.err
+                        .println("[" + myAgent.getLocalName() + "] Error handling acknowledgement: " + e.getMessage());
             }
         }
     }
@@ -541,8 +546,7 @@ public class ProductionManagerAgent extends Agent {
         public void action() {
             MessageTemplate mt = MessageTemplate.and(
                     MessageTemplate.MatchPerformative(ACLMessage.INFORM),
-                    MessageTemplate.MatchProtocol("task-completion-report")
-            );
+                    MessageTemplate.MatchProtocol("task-completion-report"));
 
             ACLMessage msg = receive(mt);
             if (msg != null) {
@@ -557,7 +561,8 @@ public class ProductionManagerAgent extends Agent {
                 String content = msg.getContent();
                 AID senderAID = msg.getSender();
 
-                System.out.println("📋 [" + myAgent.getLocalName() + "] Received task completion report from " + senderAID.getLocalName());
+                System.out.println("📋 [" + myAgent.getLocalName() + "] Received task completion report from "
+                        + senderAID.getLocalName());
 
                 // Update agent status
                 AgentStatus status = managedAgents.get(senderAID);
@@ -571,11 +576,12 @@ public class ProductionManagerAgent extends Agent {
                     status.properties.put("completedTasks", completedTasks + 1);
 
                     System.out.println("✅ [" + myAgent.getLocalName() + "] " + senderAID.getLocalName() +
-                            " marked as IDLE (Total completed: " + (completedTasks + 1) + ")");
+                            " marked as " + status.status + " (Total completed: " + (completedTasks + 1) + ")");
                 }
 
             } catch (Exception e) {
-                System.err.println("[" + myAgent.getLocalName() + "] Error handling task completion report: " + e.getMessage());
+                System.err.println(
+                        "[" + myAgent.getLocalName() + "] Error handling task completion report: " + e.getMessage());
             }
         }
     }
@@ -655,8 +661,7 @@ public class ProductionManagerAgent extends Agent {
                             ":task-id \"" + task.taskId + "\" " +
                             ":operation \"" + task.taskType + "\" " +
                             ":priority \"" + task.priority + "\" " +
-                            ":assigned-time \"" + new Date(task.assignedTime) + "\")"
-            );
+                            ":assigned-time \"" + new Date(task.assignedTime) + "\")");
 
             send(taskMsg);
 
@@ -690,21 +695,21 @@ public class ProductionManagerAgent extends Agent {
 
     private void handleTaskCompletionAck(AID senderAID, String content) {
         String taskId = extractValue(content, ":task-id");
-        ProductionTask task = activeTasks.get(taskId);
-        if (task != null) {
-            task.status = "COMPLETED";
-            task.completedTime = System.currentTimeMillis();
+        AgentStatus agentStatus = managedAgents.get(senderAID);
+        if (agentStatus != null) {
+            agentStatus.status = "IDLE"; // Robot is now idle and ready for new task
+            agentStatus.currentTask = null;
 
-            // Update agent status back to idle
-            AgentStatus agentStatus = managedAgents.get(senderAID);
-            if (agentStatus != null) {
-                agentStatus.status = "IDLE";
-                agentStatus.currentTask = null;
-            }
+            // Increment task completion counter
+            Integer completedTasks = (Integer) agentStatus.properties.getOrDefault("completedTasks", 0);
+            agentStatus.properties.put("completedTasks", completedTasks + 1);
 
-            System.out.println("[" + getLocalName() + "] Task " + taskId + " completed by " +
-                    senderAID.getLocalName());
+            System.out.println("✅ [" + getLocalName() + "] " + senderAID.getLocalName() +
+                    " marked as " + agentStatus.status + " (Total completed: " + (completedTasks + 1) + ")");
         }
+
+        System.out.println("[" + getLocalName() + "] Task " + taskId + " completed by " +
+                senderAID.getLocalName());
     }
 
     private void handleTaskFailureAck(AID senderAID, String content) {
@@ -775,7 +780,8 @@ public class ProductionManagerAgent extends Agent {
             ACLMessage confirmation = new ACLMessage(ACLMessage.INFORM);
             confirmation.addReceiver(requesterAID);
             confirmation.setProtocol("task-assignment");
-            confirmation.setContent("(TaskAssignmentConfirmation :task-id \"" + taskId + "\" :status \"" + status + "\")");
+            confirmation
+                    .setContent("(TaskAssignmentConfirmation :task-id \"" + taskId + "\" :status \"" + status + "\")");
             send(confirmation);
 
         } catch (Exception e) {
@@ -855,7 +861,8 @@ public class ProductionManagerAgent extends Agent {
     private void broadcastProductionStatus() {
         int totalAgents = managedAgents.size();
         int onlineAgents = (int) managedAgents.values().stream().mapToLong(s -> s.isOnline() ? 1 : 0).sum();
-        int activeTasks = (int) this.activeTasks.values().stream().mapToLong(t -> "IN_PROGRESS".equals(t.status) ? 1 : 0).sum();
+        int activeTasks = (int) this.activeTasks.values().stream()
+                .mapToLong(t -> "IN_PROGRESS".equals(t.status) ? 1 : 0).sum();
 
         if (totalAgents > 0) {
             System.out.println("[" + getLocalName() + "] Production Status - Agents: " +
@@ -882,7 +889,8 @@ public class ProductionManagerAgent extends Agent {
             if (startIndex != -1) {
                 startIndex += key.length() + 1;
                 int endIndex = content.indexOf(" ", startIndex);
-                if (endIndex == -1) endIndex = content.indexOf(")", startIndex);
+                if (endIndex == -1)
+                    endIndex = content.indexOf(")", startIndex);
                 if (endIndex != -1) {
                     return content.substring(startIndex, endIndex);
                 }
@@ -894,7 +902,8 @@ public class ProductionManagerAgent extends Agent {
     }
 
     /**
-     * Production Coordination Behaviour - High-level production planning and optimization
+     * Production Coordination Behaviour - High-level production planning and
+     * optimization
      */
     private class ProductionCoordinationBehaviour extends TickerBehaviour {
         public ProductionCoordinationBehaviour(Agent agent, long period) {
@@ -910,14 +919,16 @@ public class ProductionManagerAgent extends Agent {
             try {
                 System.out.println("🏭 [" + myAgent.getLocalName() + "] Coordinating production activities...");
 
-                // DISABLED: assignTasksToIdleRobots() - Conflicts with Contract Net Protocol (CNP)
-                // 
+                // DISABLED: assignTasksToIdleRobots() - Conflicts with Contract Net Protocol
+                // (CNP)
+                //
                 // CNP HANDLES TASK DISTRIBUTION AUTOMATICALLY:
                 // - ConveyorAgents broadcast CFP when products are ready
-                // - RobotAgents respond with proposals based on availability, priority, distance
+                // - RobotAgents respond with proposals based on availability, priority,
+                // distance
                 // - ConveyorAgents evaluate proposals and select winner
                 // - Only the winner moves to the conveyor
-                // 
+                //
                 // ProductionManager should NOT assign pickup tasks directly - it breaks CNP!
                 // Instead, ProductionManager only monitors system health and efficiency.
                 //
@@ -929,7 +940,8 @@ public class ProductionManagerAgent extends Agent {
                 monitorProductionEfficiency();
 
             } catch (Exception e) {
-                System.err.println("[" + myAgent.getLocalName() + "] Error in production coordination: " + e.getMessage());
+                System.err.println(
+                        "[" + myAgent.getLocalName() + "] Error in production coordination: " + e.getMessage());
             }
         }
 
@@ -985,8 +997,7 @@ public class ProductionManagerAgent extends Agent {
                                 ":task-id \"" + taskId + "\" " +
                                 ":operation \"PICKUP\" " +
                                 ":priority \"MEDIUM\" " +
-                                ":assigned-time \"" + new java.util.Date() + "\")"
-                );
+                                ":assigned-time \"" + new java.util.Date() + "\")");
 
                 myAgent.send(taskCmd);
 
@@ -1027,7 +1038,8 @@ public class ProductionManagerAgent extends Agent {
 
             for (Map.Entry<AID, AgentStatus> entry : managedAgents.entrySet()) {
                 AgentStatus status = entry.getValue();
-                if (!status.isOnline()) continue;
+                if (!status.isOnline())
+                    continue;
 
                 String type = status.agentType;
                 int currentLoad = ("BUSY".equals(status.status) || "PRODUCING".equals(status.status)) ? 1 : 0;
@@ -1060,7 +1072,8 @@ public class ProductionManagerAgent extends Agent {
                         totalRobotTasks + " tasks completed by robots, " +
                         totalProductsProduced + " products produced by conveyors.");
             } else {
-                System.out.println("📈 [" + myAgent.getLocalName() + "] Production Throughput: No tasks completed or products produced yet.");
+                System.out.println("📈 [" + myAgent.getLocalName()
+                        + "] Production Throughput: No tasks completed or products produced yet.");
             }
         }
     }
