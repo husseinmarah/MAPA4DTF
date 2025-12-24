@@ -253,7 +253,7 @@ public class AgentCoordinationBroker {
         ACLMessage notification = new ACLMessage(ACLMessage.INFORM);
         notification.addReceiver(new AID(conveyorAgentName, AID.ISLOCALNAME));
         notification.setProtocol("robot-exit");
-        notification.setContent("(robot-exit :robot-name \"" + robotAgentName + "\")");
+        notification.setContent("(robot-exit :robot \"" + robotAgentName + "\")");
         sender.send(notification);
     }
     

@@ -1615,12 +1615,10 @@ public class RobotAgent extends Agent {
 
         /**
          * Reserve pickup slot for CFP winner (called when robot wins the bid)
-         * This places the winning robot at the front of the queue
+         * This sets the winning robot as current picker, bypassing the queue
          */
         public synchronized void reserveForWinner(String robotAgent, String conveyorAgent, int conveyorId,
                 int priority) {
-            // Clear the queue and set this robot as the current picker
-
             System.out.println("┌─ PICKUP RESERVED FOR WINNER ─────────────────────");
             System.out.println("│  🏆 CFP WINNER RESERVED");
             System.out.println("│  Time:      " + java.time.Instant.now());
@@ -1629,6 +1627,15 @@ public class RobotAgent extends Agent {
             System.out.println("│  Priority:  " + priority);
             System.out.println("│  Status:    Bypassing queue (CFP winner)");
             System.out.println("└──────────────────────────────────────────────────");
+            
+            // Directly call conveyor's method to set this robot as currentPickingRobot
+            try {
+                ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(conveyorId);
+                conveyor.setCurrentPickingRobot(robotAgent);
+                System.out.println("✅ " + robotAgent + " - Set as current picker at " + conveyorAgent);
+            } catch (Exception e) {
+                System.err.println("❌ " + robotAgent + " - Error setting as current picker: " + e.getMessage());
+            }
         }
 
         /**

@@ -1429,6 +1429,14 @@ public class ConveyorAgent extends Agent {
      * Check if robot is next in queue and allow pickup
      */
     public synchronized boolean canPickup(String robotAgent) {
+        System.out.println("🔍 " + getLocalName() + " - canPickup() called: robot=" + robotAgent + ", currentPicker=" + currentPickingRobot + ", queueSize=" + pickupQueue.size());
+        
+        // If this robot is the current picker
+        if (robotAgent.equals(currentPickingRobot)) {
+            System.out.println("✅ " + getLocalName() + " - " + robotAgent + " is current picker (already authorized)");
+            return true;
+        }
+        
         // If no current picker, check if this robot is first in queue
         if (currentPickingRobot == null && !pickupQueue.isEmpty()) {
             RobotQueueEntry next = pickupQueue.peek();
@@ -1436,17 +1444,12 @@ public class ConveyorAgent extends Agent {
                 currentPickingRobot = robotAgent;
                 pickupQueue.poll(); // Remove from queue
 
-                System.out.println("✅ " + agentName + " - " + robotAgent + " authorized for pickup (first in queue)");
+                System.out.println("✅ " + getLocalName() + " - " + robotAgent + " authorized for pickup (first in queue → current picker)");
                 return true;
             }
         }
 
-        // If this robot is the current picker
-        if (robotAgent.equals(currentPickingRobot)) {
-            return true;
-        }
-
-        System.out.println("⏸️ " + agentName + " - " + robotAgent + " must wait (Queue position: "
+        System.out.println("⏸️ " + getLocalName() + " - " + robotAgent + " must wait (currentPicker: " + currentPickingRobot + ", Queue position: "
                 + getQueuePosition(robotAgent) + ")");
         return false;
     }
@@ -1455,14 +1458,35 @@ public class ConveyorAgent extends Agent {
      * Notify that robot has completed pickup
      */
     public synchronized void notifyPickupComplete(String robotAgent) {
+        System.out.println("📥 " + getLocalName() + " - notifyPickupComplete() called: robot=" + robotAgent + ", currentPicker=" + currentPickingRobot);
+        
         if (robotAgent.equals(currentPickingRobot)) {
+            System.out.println("┌─ PICKUP COMPLETE ────────────────────────────────");
+            System.out.println("│  ✅ CLEARING CURRENT PICKER");
+            System.out.println("│  Time:      " + java.time.Instant.now());
+            System.out.println("│  Conveyor:  " + getLocalName());
+            System.out.println("│  Robot:     " + robotAgent);
+            System.out.println("│  Old Picker: " + currentPickingRobot);
+            System.out.println("│  New Picker: null");
+            System.out.println("│  Queue Size: " + pickupQueue.size());
+            System.out.println("└──────────────────────────────────────────────────");
+            
             currentPickingRobot = null;
-
-            System.out.println("✅ " + agentName + " - " + robotAgent + " completed pickup");
 
             // Process next robot in queue
             processPickupQueue();
+        } else {
+            System.out.println("⚠️ " + getLocalName() + " - Robot " + robotAgent + " is not the current picker (currentPicker: " + currentPickingRobot + "), ignoring notification");
         }
+    }
+
+    /**
+     * Set current picking robot (called when CNP winner is determined)
+     * This allows the winner to bypass the queue
+     */
+    public synchronized void setCurrentPickingRobot(String robotAgent) {
+        System.out.println("🏆 " + getLocalName() + " - Setting CFP winner as current picker: " + robotAgent);
+        currentPickingRobot = robotAgent;
     }
 
     /**
