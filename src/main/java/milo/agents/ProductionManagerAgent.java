@@ -491,7 +491,6 @@ public class ProductionManagerAgent extends Agent {
         }
 
         private void handleAcknowledgement(ACLMessage msg) {
-            System.out.println("PRINT: " + msg.getContent());
             try {
                 String content = msg.getContent();
                 AID senderAID = msg.getSender();

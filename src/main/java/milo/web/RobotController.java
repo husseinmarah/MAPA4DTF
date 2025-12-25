@@ -1,6 +1,8 @@
 package milo.web;
 
 import milo.opcua.server.CustomNamespace;
+import milo.security.FederationSecurityManager;
+import milo.security.KeycloakClient;
 import milo.web.data.ConveyorDTO;
 import milo.web.data.PropertiesDTO;
 import milo.web.data.RobotDTO;
@@ -11,6 +13,7 @@ import org.eclipse.milo.opcua.stack.core.types.builtin.Variant;
 import org.eclipse.milo.opcua.stack.core.types.enumerated.TimestampsToReturn;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Key;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -119,6 +122,8 @@ public class RobotController {
         // 1. Update SharedTrustScoreService (for immediate UI feedback)
         SharedTrustScoreService.updateTrustScore(agentName, score);
 
+//        // 2. Update trust score in Keycloak directly (as fallback)
+//        KeycloakClient.getInstance().updateUserTrustScore(agentName, score);
         // 2. Send trust-update message to TrustManagerAgent
         // This will trigger automatic status change (active <-> blocked) based on thresholds
         // TrustManagerAgent will update both Keycloak trust score AND status attribute
@@ -126,43 +131,68 @@ public class RobotController {
     }
 
     /**
-     * Send trust update message to TrustManagerAgent via JADE
-     * TrustManagerAgent will handle:
-     * - Trust score update in Keycloak
+     * Send trust update to manage agent trust score and status
+     * Direct update approach since we're in Spring context, not JADE agent context
+     * Updates:
+     * - Trust score in FederationSecurityManager
      * - Automatic status change based on thresholds
      * - OPA policy propagation
      */
     private void sendTrustUpdateToTrustManager(String agentName, double newScore) {
         try {
-            // Find TrustManagerAgent
-            jade.wrapper.AgentContainer container = jade.core.Runtime.instance().createMainContainer(
-                new jade.core.ProfileImpl(false));
-            jade.wrapper.AgentController trustManager = container.getAgent("TrustManagerAgent");
+            System.out.println("📤 Processing trust update for: " + agentName + " = " + newScore);
             
-            // Create trust update message
-            jade.lang.acl.ACLMessage msg = new jade.lang.acl.ACLMessage(jade.lang.acl.ACLMessage.INFORM);
-            msg.setProtocol("trust-update");
-            msg.setContent("(:agent-id \"" + agentName + "\" :outcome \"MANUAL_UPDATE\" :new-score " + newScore + ")");
-            
-            // Get TrustManagerAgent AID and send
-            jade.core.AID trustManagerAID = new jade.core.AID("TrustManagerAgent", jade.core.AID.ISLOCALNAME);
-            msg.addReceiver(trustManagerAID);
-            
-            // Note: We need to send this through JADE runtime
-            // For now, directly update via FederationSecurityManager as fallback
-            System.out.println("📤 Sending trust update to TrustManagerAgent: " + agentName + " = " + newScore);
-            
-            // Direct update approach (since we're in Spring context, not JADE agent context)
-            milo.security.FederationSecurityManager securityManager = 
-                milo.security.FederationSecurityManager.getInstance();
+            // Update via FederationSecurityManager (updates OPA and internal state)
+            FederationSecurityManager securityManager = FederationSecurityManager.getInstance();
             securityManager.updateAgentTrustScore(agentName, newScore);
             
-            // Manually trigger status check based on thresholds
+            // Trigger status check and update based on thresholds
             checkAndUpdateAgentStatus(agentName, newScore);
             
+            // Force immediate enabled status update in OPC-UA
+            updateOpcUaEnabledNode(agentName, newScore);
+            
+            System.out.println("✅ Trust update completed for " + agentName);
+            
         } catch (Exception e) {
-            System.err.println("❌ Error sending trust update: " + e.getMessage());
+            System.err.println("❌ Error processing trust update: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Immediately update OPC-UA enabled node based on trust score
+     */
+    private void updateOpcUaEnabledNode(String agentName, double trustScore) {
+        try {
+            final double TRUST_THRESHOLD = 0.5;
+            boolean shouldBeEnabled = trustScore >= TRUST_THRESHOLD;
+            
+            // Extract agent type and number from name (e.g., "RobotAgent3" -> type=Robot, num=3)
+            if (agentName.startsWith("RobotAgent")) {
+                int robotNum = Integer.parseInt(agentName.replace("RobotAgent", ""));
+                String nodeId = "EnabledRobot" + robotNum;
+                writeValue(nodeId, shouldBeEnabled);
+                System.out.println("🔧 Updated OPC-UA node " + nodeId + ": " + shouldBeEnabled);
+                
+                // Also update the robot object directly if available
+                if (robotNum > 0 && robotNum <= CustomNamespace.robots.size()) {
+                    milo.opcua.server.RobotTemplate robot = CustomNamespace.robots.get(robotNum - 1);
+                    robot.setEnabled(shouldBeEnabled);
+                    System.out.println("🔧 Updated Robot object enabled state: " + shouldBeEnabled);
+                }
+            } 
+            else if (agentName.startsWith("ConveyorAgent")) {
+                int conveyorNum = Integer.parseInt(agentName.replace("ConveyorAgent", ""));
+                if (conveyorNum > 0 && conveyorNum <= CustomNamespace.inputConveyors.size()) {
+                    milo.agents.ConveyorAgent conveyor = CustomNamespace.inputConveyors.get(conveyorNum - 1);
+                    conveyor.getEnabledNode().setValue(new org.eclipse.milo.opcua.stack.core.types.builtin.DataValue(
+                        new org.eclipse.milo.opcua.stack.core.types.builtin.Variant(shouldBeEnabled)));
+                    System.out.println("🔧 Updated Conveyor" + conveyorNum + " enabled state = " + shouldBeEnabled);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error updating OPC-UA enabled node: " + e.getMessage());
         }
     }
 
@@ -171,14 +201,13 @@ public class RobotController {
      */
     private void checkAndUpdateAgentStatus(String agentName, double newScore) {
         try {
-            milo.security.KeycloakClient keycloakClient = new milo.security.KeycloakClient();
+            KeycloakClient keycloakClient = new KeycloakClient();
             
             final double TRUST_THRESHOLD = 0.5; // Block threshold
             final double UNBLOCK_THRESHOLD = 0.7; // Unblock threshold
             
             // Get current status from Keycloak
-            milo.security.KeycloakClient.AuthToken token = 
-                milo.security.FederationSecurityManager.getInstance().getAgentToken(agentName);
+            KeycloakClient.AuthToken token = FederationSecurityManager.getInstance().getAgentToken(agentName);
             
             if (token != null && token.userAttributes != null) {
                 String currentStatus = token.userAttributes.status;
@@ -187,7 +216,7 @@ public class RobotController {
                 if (newScore < TRUST_THRESHOLD && "active".equals(currentStatus)) {
                     boolean success = keycloakClient.updateUserStatus(agentName, "blocked");
                     if (success) {
-                        System.out.println("┌─ AGENT STATUS CHANGED ────────────────────────────");
+                        System.out.println("┌─ AGENT STATUS CHANGED (via UI) ──────────────────");
                         System.out.println("│  🚫 AGENT: " + agentName);
                         System.out.println("│  STATUS: active -> blocked");
                         System.out.println(String.format("│  REASON: Trust score %.3f < threshold %.3f", newScore, TRUST_THRESHOLD));
@@ -198,7 +227,7 @@ public class RobotController {
                 else if (newScore >= UNBLOCK_THRESHOLD && "blocked".equals(currentStatus)) {
                     boolean success = keycloakClient.updateUserStatus(agentName, "active");
                     if (success) {
-                        System.out.println("┌─ AGENT STATUS CHANGED ────────────────────────────");
+                        System.out.println("┌─ AGENT STATUS CHANGED (via UI) ──────────────────");
                         System.out.println("│  ✅ AGENT: " + agentName);
                         System.out.println("│  STATUS: blocked -> active");
                         System.out.println(String.format("│  REASON: Trust score %.3f >= threshold %.3f", newScore, UNBLOCK_THRESHOLD));

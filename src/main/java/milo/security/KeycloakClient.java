@@ -42,6 +42,16 @@ public class KeycloakClient {
     private static final String DEFAULT_REALM = "warehouse-federation";
     private static final String DEFAULT_CLIENT_ID = "warehouse-client";
 
+    // create singleton instance
+    private static KeycloakClient instance;
+
+    public static KeycloakClient getInstance() {
+        if (instance == null) {
+            instance = new KeycloakClient();
+        }
+        return instance;
+    }
+
     /**
      * Create Keycloak client with default configuration
      */
@@ -321,12 +331,12 @@ public class KeycloakClient {
                     return false;
                 }
                 System.out
-                        .println("✅ KeycloakClient: Successfully updated trust score for " + username + " to " + score);
+                        .println("✅ KeycloakClient: Successfully updated user trust score for " + username + " to " + score);
                 return true;
             }
 
         } catch (Exception e) {
-            System.err.println("❌ KeycloakClient: Error updating trust score: " + e.getMessage());
+            System.err.println("❌ KeycloakClient: Failed to update user trust score: " + e.getMessage());
             e.printStackTrace();
             return false;
         }

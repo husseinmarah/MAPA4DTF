@@ -29,6 +29,25 @@ public class OPAClient {
     private java.util.Map<String, String> componentRoles;
     private JSONArray federationRules;
 
+    public double trustThreshold;
+
+    // create singleton instance
+    private static OPAClient instance;
+    public static OPAClient getInstance() {
+        if (instance == null) {
+            instance = new OPAClient();
+        }
+        instance.setTrustThreshold(0.5);
+        return instance;
+    }
+
+    public void setTrustThreshold(double trustThreshold) {
+        this.trustThreshold = trustThreshold;
+    }
+
+    public double getTrustThreshold() {
+        return trustThreshold;
+    }
     /**
      * Create OPA client with default URL
      */

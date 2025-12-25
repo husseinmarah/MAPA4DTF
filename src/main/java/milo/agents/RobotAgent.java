@@ -16,6 +16,7 @@ import milo.opcua.server.RobotTemplate;
 import milo.opcua.server.SystemConfig;
 import milo.security.FederationSecurityManager;
 import milo.security.FederationSecurityManager.SecurityContext;
+import milo.security.OPAClient;
 import milo.utils.DelayUtils;
 import milo.utils.AgentCoordinationBroker;
 import org.json.simple.JSONArray;
@@ -46,12 +47,12 @@ public class RobotAgent extends Agent {
     private static int taskCounter = 0; // Global task counter for fair distribution
     private static final Object assignmentLock = new Object();
     private int consecutiveIdleCycles = 0; // Track how long this robot has been idle
-
     // Priority-based collision resolution
     private static final boolean USE_PRIORITY_RESOLUTION = true; // Enable priority-based task assignment
 
     // Contract Net Protocol State Tracking
-    private java.util.Set<String> activeProposals = new java.util.HashSet<>(); // Track conversation IDs of sent proposals
+    private java.util.Set<String> activeProposals = new java.util.HashSet<>(); // Track conversation IDs of sent
+                                                                               // proposals
     int taskId = 0; // Unique task ID generator for proposals
 
     // Location tracking for conveyor exit notification
@@ -72,7 +73,7 @@ public class RobotAgent extends Agent {
     // =====================================================================
     private FederationSecurityManager securityManager;
     private SecurityContext securityContext; // Keycloak authentication context
-    
+
     // =====================================================================
     // AGENT COORDINATION
     // =====================================================================
@@ -167,7 +168,7 @@ public class RobotAgent extends Agent {
 
         securityManager = FederationSecurityManager.getInstance();
         securityContext = securityManager.authenticateWithKeycloak(keycloakUsername, keycloakPassword);
-        
+
         // Initialize coordination broker
         coordinationBroker = AgentCoordinationBroker.getInstance();
 
@@ -997,23 +998,28 @@ public class RobotAgent extends Agent {
                 }
 
                 // FEDERATION COORDINATION: Register in pickup queue if not already registered
-                // CRITICAL: Only register if not already carrying product AND not already current picker
+                // CRITICAL: Only register if not already carrying product AND not already
+                // current picker
                 boolean conveyorHasProduct = coordinationBroker.isConveyorProduced(conveyorAgentName);
                 if (!robot.isCarryingProduct() && conveyorHasProduct) {
                     // Check if this robot is already authorized as current picker
                     boolean isCurrentPicker = coordinationBroker.canRobotPickup(getLocalName(), conveyorAgentName);
-                    
+
                     if (!isCurrentPicker) {
                         // Not yet authorized, register in queue
-                        coordinationBroker.registerRobotForPickup(getLocalName(), conveyorAgentName, robot.getPriority());
-                        System.out.println("📝 " + getLocalName() + " - Registered in pickup queue at " + conveyorAgentName);
+                        coordinationBroker.registerRobotForPickup(getLocalName(), conveyorAgentName,
+                                robot.getPriority());
+                        System.out.println(
+                                "📝 " + getLocalName() + " - Registered in pickup queue at " + conveyorAgentName);
                     } else {
                         // Already authorized as current picker, no need to register
-                        System.out.println("✅ " + getLocalName() + " - Already authorized as current picker at " + conveyorAgentName);
+                        System.out.println("✅ " + getLocalName() + " - Already authorized as current picker at "
+                                + conveyorAgentName);
                     }
                 }
 
-                // FEDERATION COORDINATION: Check if this robot can pick up (is it next in queue?)
+                // FEDERATION COORDINATION: Check if this robot can pick up (is it next in
+                // queue?)
                 // Reuse the isCurrentPicker result from above if we just checked it
                 boolean canPickup;
                 if (!robot.isCarryingProduct() && conveyorHasProduct) {
@@ -1023,9 +1029,10 @@ public class RobotAgent extends Agent {
                     // Not trying to pickup, just check status
                     canPickup = false;
                 }
-                
+
                 System.out.println("🔍 " + getLocalName() + " - Checking pickup permission at " + conveyorAgentName
-                        + ": " + canPickup + " (Produced: " + conveyorHasProduct + ", Carrying: " + robot.isCarryingProduct() + ")");
+                        + ": " + canPickup + " (Produced: " + conveyorHasProduct + ", Carrying: "
+                        + robot.isCarryingProduct() + ")");
 
                 System.out.println(
                         conveyorAgentName + " Status - Produced: " + conveyorHasProduct + ", Pickup Queue: ");
@@ -1056,7 +1063,8 @@ public class RobotAgent extends Agent {
 
                     // CRITICAL: Return immediately to prevent any further processing
                     // that might clear or override the drop-off target
-                    System.out.println("✅ " + getLocalName() + " - Pickup complete, drop-off target assigned, exiting method");
+                    System.out.println(
+                            "✅ " + getLocalName() + " - Pickup complete, drop-off target assigned, exiting method");
                     return; // Exit method immediately after successful pickup
                 }
             }
@@ -1090,8 +1098,29 @@ public class RobotAgent extends Agent {
             reportTaskCompletionToManager();
             robot.setCarryingProduct(false);
 
-            // Report SUCCESS to TrustManagerAgent
-            sendTrustUpdate("SUCCESS");
+            double currentTrustScore = securityManager.getAgentTrustScore(getLocalName());
+            System.out.println("CURRENT TRUST SCORE: " + currentTrustScore);
+            if (currentTrustScore < OPAClient.getInstance().getTrustThreshold()) {
+                System.out.println("⚠️ " + getLocalName() + " - Trust score below threshold (" + currentTrustScore
+                        + " < " + OPAClient.getInstance().getTrustThreshold() + "). Reporting FAILURE to TrustManagerAgent.");
+                // Report FAILURE to TrustManagerAgent due to low trust score
+                sendTrustUpdate("FAILURE");
+
+                // Disable robot due to low trust score
+                robot.setEnabled(false);
+                updateRobotEnabledStatus();
+                return; // Skip further processing on low trust
+
+            } else {
+                System.out.println("✅ " + getLocalName() + " - Trust score acceptable (" + currentTrustScore
+                        + " >= " + OPAClient.getInstance().getTrustThreshold() + "). Reporting SUCCESS to TrustManagerAgent.");
+                
+                // Enable robot due to low trust score
+                robot.setEnabled(true);
+                updateRobotEnabledStatus();
+                // Report SUCCESS to TrustManagerAgent
+                sendTrustUpdate("SUCCESS");
+            }
 
             // Notify all conveyors that robot is available and returning to idle
             notifyConveyorsRobotAvailable();
@@ -1139,7 +1168,8 @@ public class RobotAgent extends Agent {
         String currentLocation = robot.getLocation();
 
         // Fallback: If robot is carrying a product but has no target (edge case)
-        // This shouldn't happen as assignDropOffTarget is called immediately after pickup
+        // This shouldn't happen as assignDropOffTarget is called immediately after
+        // pickup
         if (isCarryingProduct && currentTarget.isEmpty()) {
             System.out.println("┌─ FALLBACK TARGET ASSIGNMENT ─────────────────────");
             System.out.println("│  ⚠️ WARNING: Carrying product but no target!");
@@ -1628,7 +1658,7 @@ public class RobotAgent extends Agent {
             System.out.println("│  Priority:  " + priority);
             System.out.println("│  Status:    Bypassing queue (CFP winner)");
             System.out.println("└──────────────────────────────────────────────────");
-            
+
             // Directly call conveyor's method to set this robot as currentPickingRobot
             try {
                 ConveyorAgent conveyor = CustomNamespace.getInputConveyors().get(conveyorId);
@@ -1769,7 +1799,8 @@ public class RobotAgent extends Agent {
                 // Check if robot is available and enabled
                 boolean robotExists = myRobot != null;
                 boolean robotEnabled = robotExists && myRobot.isEnabled();
-                System.out.println("🤖 " + getLocalName() + " - Robot status: exists=" + robotExists + ", enabled="+ robotEnabled);
+                System.out.println("🤖 " + getLocalName() + " - Robot status: exists=" + robotExists + ", enabled="
+                        + robotEnabled);
 
                 if (myRobot == null || !myRobot.isEnabled()) {
                     System.out.println("⚠️ " + getLocalName() + " - Cannot bid (Robot not enabled)");

@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import milo.federation.FederationHelper;
+import milo.web.SharedTrustScoreService;
 
 /**
  * Federation Security Manager for policy enforcement and IP protection
@@ -44,6 +45,15 @@ public class FederationSecurityManager {
         public String getDescription() {
             return description;
         }
+    }
+
+
+    // Singleton instance accessor
+    public static FederationSecurityManager getSecurityManager() {
+        if (instance == null) {
+            return getInstance();
+        }
+        return getInstance();
     }
 
     /**
@@ -802,7 +812,7 @@ public class FederationSecurityManager {
                 }
 
                 // Update SharedTrustScoreService again to be sure
-                milo.web.SharedTrustScoreService.updateTrustScore(agentName, score);
+                SharedTrustScoreService.updateTrustScore(agentName, score);
             }
         }
         return success;
