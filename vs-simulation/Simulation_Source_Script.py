@@ -118,6 +118,8 @@ def convert_boolean_value(value):
         return value  # Keep as Python boolean for VC, metamodel will handle conversion
     return value
 
+# Simulation Time management helpers
+
 def create_metamodel_compatible_properties(component, config):
     """Create additional properties with camelCase names for metamodel compatibility."""
     
@@ -134,15 +136,16 @@ def create_metamodel_compatible_properties(component, config):
                 
                 # If names are different, create the camelCase name property too
                 if original_name != camel_case_name:
-                    if not component.getProperty(camel_case_name):
+                    camel_case_prop = component.getProperty(camel_case_name)
+                    if not camel_case_prop:
                         type_map = {"string": VC_STRING, "number": VC_INTEGER, "integer": VC_INTEGER, "real": VC_REAL, "boolean": VC_BOOLEAN}
                         camel_case_prop = component.createProperty(type_map.get(prop_config["type"], VC_STRING), camel_case_name)
                         print("Created metamodel-compatible property: {}".format(camel_case_name))
                         
-                        # Link it to the original property
-                        original_prop = component.getProperty(original_name)
-                        if original_prop:
-                            camel_case_prop.Value = original_prop.Value
+                    # Copy initial value from original property
+                    original_prop = component.getProperty(original_name)
+                    if original_prop and camel_case_prop:
+                        camel_case_prop.Value = original_prop.Value
     
     # Create metamodel-compatible properties for numbered properties
     if "numbered_properties" in config:
@@ -166,15 +169,16 @@ def create_metamodel_compatible_properties(component, config):
                     
                     # If names are different, create the camelCase name property too
                     if original_name != camel_case_name:
-                        if not component.getProperty(camel_case_name):
+                        camel_case_prop = component.getProperty(camel_case_name)
+                        if not camel_case_prop:
                             type_map = {"string": VC_STRING, "number": VC_INTEGER, "integer": VC_INTEGER, "real": VC_REAL, "boolean": VC_BOOLEAN}
                             camel_case_prop = component.createProperty(type_map.get(prop_config["type"], VC_STRING), camel_case_name)
                             print("Created metamodel-compatible property: {}".format(camel_case_name))
                             
-                            # Link it to the original property
-                            original_prop = component.getProperty(original_name)
-                            if original_prop:
-                                camel_case_prop.Value = original_prop.Value
+                        # Copy initial value from original property
+                        original_prop = component.getProperty(original_name)
+                        if original_prop and camel_case_prop:
+                            camel_case_prop.Value = original_prop.Value
 
 def create_component(app, config):
     """Create a single component based on configuration."""
@@ -1018,14 +1022,64 @@ def update_robot_positions():
 # Helper functions
 def get_robot_property(prop_name, robot_index):
     global comp
+    
+    # Try PascalCase (simulation)
     unique_prop_name = '{0}{1}'.format(prop_name, robot_index)
     prop = comp.getProperty(unique_prop_name)
-    return prop
+    if prop:
+        return prop
+        
+    # Try camelCase (OPC-UA metamodel sync)
+    # Using a simple mapping-based approach for common properties
+    camel_map = {
+        "EnabledRobot": "enabledRobot",
+        "Target": "target",
+        "Stop": "stop",
+        "BatteryLevel": "batteryLevel",
+        "Location": "location",
+        "NextLocation": "nextLocation",
+        "Priority": "priority"
+    }
+    
+    if prop_name in camel_map:
+        camel_name = '{0}{1}'.format(camel_map[prop_name], robot_index)
+        prop = comp.getProperty(camel_name)
+        return prop
+        
+    return None
 
 def set_robot_property(prop_name, value, robot_index):
-    prop = get_robot_property(prop_name, robot_index)
+    # Update all property variants to keep them in sync manually
+    
+    # PascalCase
+    unique_prop_name = '{0}{1}'.format(prop_name, robot_index)
+    prop = comp.getProperty(unique_prop_name)
     if prop:
         prop.Value = value
+        
+    # camelCase
+    camel_map = {
+        "EnabledRobot": "enabledRobot",
+        "Target": "target",
+        "Stop": "stop",
+        "BatteryLevel": "batteryLevel",
+        "Location": "location",
+        "NextLocation": "nextLocation",
+        "Priority": "priority",
+        "TravelDistance": "travelDistance",
+        "PartsTransported": "partsTransported",
+        "CurrentState": "currentState",
+        "IdleTime": "idleTime",
+        "MovingTime": "movingTime",
+        "TransportingTime": "transportingTime",
+        "Utilization": "utilization"
+    }
+    
+    if prop_name in camel_map:
+        camel_name = '{0}{1}'.format(camel_map[prop_name], robot_index)
+        prop = comp.getProperty(camel_name)
+        if prop:
+            prop.Value = value
 
 def get_robot_property_value(prop_name, robot_index):
     prop = get_robot_property(prop_name, robot_index)
@@ -1068,6 +1122,49 @@ def get_previous_target_point():
     # or you must adapt this to read a stored variable (e.g., from robot_states).
     # For this snippet, we return None to force initial calculation.
     return None 
+
+def clamp_point_to_area(point, pathway):
+    """Clamp a point to be inside the pathway area"""
+    # Check for AreaLength/AreaWidth first (custom properties)
+    length_prop = pathway.getProperty("AreaLength")
+    width_prop = pathway.getProperty("AreaWidth")
+    
+    if length_prop and width_prop:
+        half_length = length_prop.Value / 2.0
+        half_width = width_prop.Value / 2.0
+    else:
+        # Fallback to standard VC pathway properties
+        length1 = pathway.getProperty('Length1').Value if pathway.getProperty('Length1') else 0
+        length2 = pathway.getProperty('Length2').Value if pathway.getProperty('Length2') else 0
+        width1 = pathway.getProperty('Width1').Value if pathway.getProperty('Width1') else 0
+        width2 = pathway.getProperty('Width2').Value if pathway.getProperty('Width2') else 0
+        
+        if is_conveyor(pathway.Name):
+            conveyor_length = pathway.getProperty('ConveyorLength').Value if pathway.getProperty('ConveyorLength') else 0
+            length1 = length2 = conveyor_length / 2
+            width1 = width2 = pathway.getProperty('ConveyorWidth').Value if pathway.getProperty('ConveyorWidth') else 0
+            
+        half_length = (length1 + length2) / 2.0
+        half_width = max(width1, width2) / 2.0
+
+    area_mtx = pathway.WorldPositionMatrix
+    area_pos = area_mtx.P
+    
+    # Convert to local coordinates
+    dx = point.X - area_pos.X
+    dy = point.Y - area_pos.Y
+    local_x = dx * area_mtx.N.X + dy * area_mtx.N.Y
+    local_y = dx * area_mtx.O.X + dy * area_mtx.O.Y
+    
+    # Clamp to bounds
+    local_x = max(-half_length, min(half_length, local_x))
+    local_y = max(-half_width, min(half_width, local_y))
+    
+    # Convert back to world coordinates
+    world_x = area_pos.X + local_x * area_mtx.N.X + local_y * area_mtx.O.X
+    world_y = area_pos.Y + local_x * area_mtx.N.Y + local_y * area_mtx.O.Y
+    
+    return vcVector.new(world_x, world_y, point.Z)
 
 def find_shortest_transition_point(robot_pos, current_pathway, next_pathway):
     """Find the shortest transition point between current pathway and next pathway/destination - optimized for performance"""
@@ -1287,6 +1384,12 @@ def find_shortest_transition_point(robot_pos, current_pathway, next_pathway):
 
                     offset_vec = vector_multiply(nudge_dir, offset_val)
                     best_next_point = vector_add(best_next_point, offset_vec)
+                    # Clamp to ensure the nudged point stays within next pathway boundaries
+                    best_next_point = clamp_point_to_area(best_next_point, next_pathway)
+
+            # Clamp exit point to current pathway to ensure it's within bounds
+            if best_current_point:
+                best_current_point = clamp_point_to_area(best_current_point, current_pathway)
 
             return best_current_point, best_next_point
 
@@ -1295,6 +1398,8 @@ def find_shortest_transition_point(robot_pos, current_pathway, next_pathway):
             # Use the anchor logic here too for consistency
             best_exit_point = min(current_boundary_points, 
                                   key=lambda p: get_distance_2d(next_pos, p))
+            # Clamp exit point to current pathway
+            best_exit_point = clamp_point_to_area(best_exit_point, current_pathway)
             return best_exit_point, next_pos
 
     else:
@@ -1384,6 +1489,11 @@ def calculate_smart_entry_exit_points(robot_pos, current_pathway, next_pathway=N
     # Find best entry point (closest to robot)
     entry_point = min(entry_candidate_points, key=lambda p: vector_length(vector_subtract(p, robot_pos)))
     
+    # Clamp both entry and exit points to ensure they're within pathway boundaries
+    entry_point = clamp_point_to_area(entry_point, current_pathway)
+    if next_pathway:
+        exit_point = clamp_point_to_area(exit_point, current_pathway)
+    
     return entry_point, exit_point
 
 def calculate_intelligent_pathway_points(robot_pos, current_pathway, next_pathway=None, previous_pathway=None):
@@ -1468,6 +1578,9 @@ def calculate_intelligent_pathway_points(robot_pos, current_pathway, next_pathwa
     # Find best entry point (closest to robot)
     entry_point = min(entry_candidates, key=lambda p: vector_length(vector_subtract(p, robot_pos)))
     
+    # Clamp entry point to ensure it's within current pathway
+    entry_point = clamp_point_to_area(entry_point, current_pathway)
+    
     # Calculate intermediate points for smooth navigation
     intermediate_points = []
     
@@ -1499,7 +1612,13 @@ def calculate_intelligent_pathway_points(robot_pos, current_pathway, next_pathwa
                     center_adjustment = vector_multiply(normalize_vector(direction_to_center), 200)
                     intermediate = vector_add(intermediate, center_adjustment)
                 
+                # Clamp intermediate point to stay within pathway boundaries
+                intermediate = clamp_point_to_area(intermediate, current_pathway)
                 intermediate_points.append(intermediate)
+    
+    # Clamp exit point to ensure it stays within pathway boundaries
+    if next_pathway:
+        exit_point = clamp_point_to_area(exit_point, current_pathway)
     
     return entry_point, intermediate_points, exit_point
 
@@ -1520,61 +1639,21 @@ def get_optimal_pathway_direction(robot, robot_index, current_pathway, pathways,
 
 def find_pathway_intersection_point(current_pathway, next_pathway):
     """Find the optimal intersection point between two pathways for smooth transitions"""
-    # Get current pathway geometry
+    # Use clamp_point_to_area for better intersection finding
     current_pos = current_pathway.WorldPositionMatrix.P
-    current_length1 = current_pathway.getProperty('Length1').Value if current_pathway.getProperty('Length1') else 0
-    current_length2 = current_pathway.getProperty('Length2').Value if current_pathway.getProperty('Length2') else 0
-    
-    if is_conveyor(current_pathway.Name):
-        conveyor_length = current_pathway.getProperty('ConveyorLength').Value if current_pathway.getProperty('ConveyorLength') else 0
-        current_length1 = current_length2 = conveyor_length / 2
-
-    current_N = current_pathway.WorldPositionMatrix.N
-    current_direction = normalize_vector(current_N)
-    current_start = vector_subtract(current_pos, vector_multiply(current_direction, current_length1))
-    current_end = vector_add(current_pos, vector_multiply(current_direction, current_length2))
-    
-    # Get next pathway geometry
     next_pos = next_pathway.WorldPositionMatrix.P
-    next_length1 = next_pathway.getProperty('Length1').Value if next_pathway.getProperty('Length1') else 0
-    next_length2 = next_pathway.getProperty('Length2').Value if next_pathway.getProperty('Length2') else 0
     
-    if is_conveyor(next_pathway.Name):
-        conveyor_length = next_pathway.getProperty('ConveyorLength').Value if next_pathway.getProperty('ConveyorLength') else 0
-        next_length1 = next_length2 = conveyor_length / 2
-
-    next_N = next_pathway.WorldPositionMatrix.N
-    next_direction = normalize_vector(next_N)
-    next_start = vector_subtract(next_pos, vector_multiply(next_direction, next_length1))
-    next_end = vector_add(next_pos, vector_multiply(next_direction, next_length2))
+    # Start with midpoint between centers
+    mid_x = (current_pos.X + next_pos.X) / 2.0
+    mid_y = (current_pos.Y + next_pos.Y) / 2.0
+    mid_z = (current_pos.Z + next_pos.Z) / 2.0
+    midpoint = vcVector.new(mid_x, mid_y, mid_z)
     
-    # Find the closest points between the two pathways
-    potential_intersections = [
-        (current_start, next_start),
-        (current_start, next_end),
-        (current_end, next_start),
-        (current_end, next_end),
-        (current_pos, next_pos)  # Include pathway centers
-    ]
+    # Clamp to both areas to ensure it stays in the overlap
+    point = clamp_point_to_area(midpoint, current_pathway)
+    point = clamp_point_to_area(point, next_pathway)
     
-    # Find the intersection with minimum distance
-    min_distance = float('inf')
-    best_intersection = None
-    
-    for current_point, next_point in potential_intersections:
-        distance = vector_length(vector_subtract(current_point, next_point))
-        if distance < min_distance:
-            min_distance = distance
-            best_intersection = (current_point, next_point)
-    
-    # Return the midpoint of the best intersection
-    if best_intersection:
-        current_point, next_point = best_intersection
-        midpoint = vector_add(current_point, vector_multiply(vector_subtract(next_point, current_point), 0.5))
-        return midpoint
-    
-    # Fallback to pathway centers
-    return vector_add(current_pos, vector_multiply(vector_subtract(next_pos, current_pos), 0.5))
+    return point
 
 def can_transition_directly(robot_pos, current_pathway, next_pathway, transition_threshold=1500):
     """Check if robot can transition directly between pathways without going to endpoints"""
@@ -1871,11 +1950,20 @@ def check_bypass_possibility(robot, robot_index, stationary_robot, stationary_ro
     perp_right = vcVector.new(-movement_direction.Y, movement_direction.X, 0)
     perp_left = vcVector.new(movement_direction.Y, -movement_direction.X, 0)
     
+    # Get current location to determine pathway for clamping
+    current_location = get_robot_property_value('Location', robot_index)
+    current_pathway = app.findComponent(current_location) if current_location else None
+    
     # Check both left and right bypass routes
     for bypass_direction in [perp_right, perp_left]:
         # Calculate bypass waypoint (offset to the side)
         bypass_offset = vector_multiply(bypass_direction, bypass_clearance)
         bypass_point = vector_add(robot_pos, bypass_offset)
+        
+        # Clamp bypass point to current pathway if available
+        if current_pathway and (current_pathway.Name.startswith('Pathway Area') or 
+                               current_pathway.Name.startswith('Idle Location')):
+            bypass_point = clamp_point_to_area(bypass_point, current_pathway)
         
         # Check if bypass point is clear of other robots
         bypass_clear = True
@@ -2824,21 +2912,39 @@ def OnRun():
             enabled_prop = template_robot.getProperty('EnabledRobot{0}'.format(i))
             robot_name = "Robot #{0}".format(i)
         
-            # Default to True if not set yet (waiting for OPC-UA)
+            # Reset status variables for each robot to avoid variable leakage
+            status_text = "WAITING (Not synced from OPC-UA yet)"
+            symbol = "🕐"
+
+            # Check EnabledRobot properties from template (synced from OPC-UA)
             if enabled_prop:
                 robot_enabled = enabled_prop.Value
                 if robot_enabled == True:
                     status_text = "ENABLED (Authorized by OPA policy)"
-                    symbol = "✅"  # or "✔️"
+                    symbol = "✅"
                     enabled_robots += 1
-                elif robot_enabled == False:
-                    status_text = "DISABLED (Blocked by OPA policy)"
-                    symbol = "❎"  # or "❌"
-                    disabled_robots += 1
                 else:
-                    status_text = "WAITING (Not synced from OPC-UA yet)"
-                    symbol = "🕐"  # or "[-]"
-                    waiting_robots += 1
+                    status_text = "DISABLED (Blocked by OPA policy)"
+                    symbol = "❎"
+                    disabled_robots += 1
+            else:
+                # Fallback check directly on the robot if template prop not yet synced
+                robot_comp = app.findComponent(robot_name)
+                if robot_comp:
+                    # Try both variants due to naming inconsistency
+                    enabled_val = None
+                    prop = robot_comp.getProperty('EnabledRobot') or robot_comp.getProperty('enabledRobot')
+                    if prop:
+                        enabled_val = prop.Value
+                    
+                    if enabled_val == True:
+                        status_text = "ENABLED (Checked on Robot)"
+                        symbol = "✅"
+                        enabled_robots += 1
+                    else:
+                        status_text = "DISABLED (Default/Blocked)"
+                        symbol = "❎"
+                        disabled_robots += 1
                 
             print("  {0} {1} - {2}".format(symbol, robot_name, status_text))
     
@@ -2935,8 +3041,9 @@ def OnRun():
             robot_index = get_robot_index(robot.Name)
             
             # Check if robot is enabled - skip disabled robots
-            # Default to True if property doesn't exist (None) - only False explicitly disables
-            robot_enabled = get_robot_property_value('Enabled', robot_index)
+            # Default to True if property doesn't exist (None)
+            # Unified property name to 'EnabledRobot' for consistency with OPC-UA and report
+            robot_enabled = get_robot_property_value('EnabledRobot', robot_index)
             if robot_enabled == False:  # Explicitly check for False, not None
                 continue  # Skip this robot entirely if not enabled
             
