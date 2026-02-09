@@ -173,7 +173,7 @@
         "org": ["Stakeholder3_ConveyorContainer"],
         "role": ["worker"],
         "trustScore": ["0.8"],
-        "status": ["active"]  
+        "status": ["blocked"]
       }
     },
     {
