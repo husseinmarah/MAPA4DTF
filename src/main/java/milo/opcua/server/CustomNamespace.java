@@ -46,6 +46,11 @@ public class CustomNamespace extends ManagedNamespace {
     public static List<ConveyorAgent> inputConveyors = new ArrayList<>();
 
     // =====================================================================
+    // BATTERY MANAGEMENT - Track fractional drain
+    // =====================================================================
+    private static final Map<Integer, Double> batteryDrainAccumulator = new HashMap<>();
+
+    // =====================================================================
     // SYSTEM PROPERTIES - Clear organization
     // =====================================================================
     private Map<String, UaVariableNode> systemProperties = new HashMap<>();
@@ -284,30 +289,35 @@ public class CustomNamespace extends ManagedNamespace {
     private void startBatteryLevelReduction() {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
         executor.scheduleAtFixedRate(() -> {
-            for (RobotTemplate robot : robots) {
+            for (int i = 0; i < robots.size(); i++) {
+                RobotTemplate robot = robots.get(i);
 
                 int batteryLevel = robot.getBatteryLevel();
                 if (batteryLevel <= 0)
                     continue;
 
-                int newBattery = batteryLevel;
+                // Get accumulated fractional drain for this robot (uses robot index i)
+                double accumulated = batteryDrainAccumulator.getOrDefault(i, 0.0); // Will be fixed
 
                 // Check if the robot is moving
                 if (robot.isEnabled() && !robot.isStop()) {
-
-                    // Larger battery drain when moving
-                    newBattery -= 0.05; // or any realistic value
+                    // Larger battery drain when moving (5% every 30 seconds)
+                    accumulated += 5.0;
                 } else {
-                    // Minimal idle battery drain
-                    newBattery -= 0.01; // if you support decimals
-                    // or:
-                    // newBattery -= 1; // very small drain if only integers allowed
+                    // Minimal idle battery drain (1% every 30 seconds)
+                    accumulated += 1.0;
                 }
 
-                // Ensure battery doesn’t go negative
-                newBattery = Math.max(0, newBattery);
+                // Apply integer drain if accumulated enough
+                int drainAmount = (int) accumulated;
+                if (drainAmount > 0) {
+                    int newBattery = Math.max(0, batteryLevel - drainAmount);
+                    robot.setBatteryLevel(newBattery);
+                    accumulated -= drainAmount; // Keep the fractional part
+                }
 
-                robot.setBatteryLevel(newBattery);
+                // Store accumulated drain
+                batteryDrainAccumulator.put(i, accumulated);
             }
         }, 0, 30, TimeUnit.SECONDS);
     }
