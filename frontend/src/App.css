@@ -11,6 +11,7 @@
   --success-color: #10b981;
   --danger-color: #ef4444;
   --header-bg: #1e293b;
+  --base-font-size: 18px; /* Increased for better readability */
 }
 
 html,
@@ -19,6 +20,7 @@ body {
   margin: 0;
   overflow: hidden;
   /* Prevent body scroll */
+  font-size: var(--base-font-size); /* Apply base font size */
 }
 
 body {
