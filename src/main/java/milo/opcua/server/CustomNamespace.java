@@ -300,9 +300,9 @@ public class CustomNamespace extends ManagedNamespace {
                 double accumulated = batteryDrainAccumulator.getOrDefault(i, 0.0); // Will be fixed
 
                 // Check if the robot is moving
-                if (robot.isEnabled() && !robot.isStop()) {
+                if (robot.isEnabled() && robot.getLocation().startsWith("Pathway")) {
                     // Larger battery drain when moving (5% every 30 seconds)
-                    accumulated += 5.0;
+                    accumulated += 2.0;
                 } else {
                     // Minimal idle battery drain (1% every 30 seconds)
                     accumulated += 1.0;
