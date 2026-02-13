@@ -1098,29 +1098,11 @@ public class RobotAgent extends Agent {
             reportTaskCompletionToManager();
             robot.setCarryingProduct(false);
 
-            double currentTrustScore = securityManager.getAgentTrustScore(getLocalName());
-            System.out.println("CURRENT TRUST SCORE: " + currentTrustScore);
-            if (currentTrustScore < OPAClient.getInstance().getTrustThreshold()) {
-                System.out.println("⚠️ " + getLocalName() + " - Trust score below threshold (" + currentTrustScore
-                        + " < " + OPAClient.getInstance().getTrustThreshold() + "). Reporting FAILURE to TrustManagerAgent.");
-                // Report FAILURE to TrustManagerAgent due to low trust score
-                sendTrustUpdate("FAILURE");
-
-                // Disable robot due to low trust score
-                robot.setEnabled(false);
-                updateRobotEnabledStatus();
-                return; // Skip further processing on low trust
-
-            } else {
-                System.out.println("✅ " + getLocalName() + " - Trust score acceptable (" + currentTrustScore
-                        + " >= " + OPAClient.getInstance().getTrustThreshold() + "). Reporting SUCCESS to TrustManagerAgent.");
-                
-                // Enable robot due to low trust score
-                robot.setEnabled(true);
-                updateRobotEnabledStatus();
-                // Report SUCCESS to TrustManagerAgent
-                sendTrustUpdate("SUCCESS");
-            }
+            // TRUST SCORE UPDATE: Report SUCCESS for completed delivery
+            // Trust updates reflect actual task outcomes, not current trust level
+            // This ensures independent trust scoring between agents
+            sendTrustUpdate("SUCCESS");
+            System.out.println("✅ " + getLocalName() + " - Reported SUCCESS to TrustManagerAgent for completed delivery");
 
             // Notify all conveyors that robot is available and returning to idle
             notifyConveyorsRobotAvailable();
@@ -1508,13 +1490,15 @@ public class RobotAgent extends Agent {
                 // Execute the task
                 boolean taskSuccess = executeProductionTask(taskId, operation, priority);
 
-                // Send completion acknowledgement
+                // TRUST SCORE UPDATE: Report based on actual task execution outcome
+                // Trust updates reflect this robot's own performance
+                // Independent from other agents - their failures don't affect this robot's trust
                 if (taskSuccess) {
                     sendTaskCompletedAck(msg.getSender(), taskId, "Task executed successfully");
-                    sendTrustUpdate("SUCCESS"); // Report SUCCESS
+                    sendTrustUpdate("SUCCESS");
                 } else {
                     sendTaskFailedAck(msg.getSender(), taskId, "Task execution failed");
-                    sendTrustUpdate("FAILURE"); // Report FAILURE
+                    sendTrustUpdate("FAILURE");
                 }
 
             } catch (Exception e) {
