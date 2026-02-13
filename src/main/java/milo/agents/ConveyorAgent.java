@@ -24,6 +24,7 @@ import jade.lang.acl.MessageTemplate;
 
 import java.util.Iterator;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Template-configurable Conveyor Agent with Federation Support
@@ -619,7 +620,9 @@ public class ConveyorAgent extends Agent {
                 System.out.println("│  Conveyor: " + agentName + " (#" + conveyorId + ")");
                 System.out.println("│  Status:   Produced → false");
                 System.out.println("└──────────────────────────────────────────────────");
-                // Report SUCCESS to TrustManagerAgent
+                // TRUST SCORE UPDATE: Report SUCCESS for product pickup
+                // Trust updates reflect the conveyor's own performance (successfully made product available)
+                // Independent from robot performance - robot failures don't affect conveyor trust
                 sendTrustUpdate("SUCCESS");
             }
         } catch (Exception e) {
@@ -1182,7 +1185,8 @@ public class ConveyorAgent extends Agent {
             try {
                 if (proposals.isEmpty()) {
                     System.out.println("⚠️ " + getLocalName() + " - No proposals received for pickup task");
-                    sendTrustUpdate("FAILURE"); // Report FAILURE
+                    // NOTE: Not reporting FAILURE - no available robots is not the conveyor's fault
+                    // Trust updates should only reflect the conveyor's own performance
                     taskAssignmentInProgress = false;
                     done = true;
                     return;
@@ -1487,8 +1491,9 @@ public class ConveyorAgent extends Agent {
      * Set current picking robot (called when CNP winner is determined)
      * This allows the winner to bypass the queue
      */
-    public synchronized void setCurrentPickingRobot(String robotAgent) {
+    public synchronized void setCurrentPickingRobot(String robotAgent) throws InterruptedException {
         System.out.println("🏆 " + getLocalName() + " - Setting CFP winner as current picker: " + robotAgent);
+        Thread.sleep(5000);
         currentPickingRobot = robotAgent;
     }
 
