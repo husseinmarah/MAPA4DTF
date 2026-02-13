@@ -23,14 +23,14 @@ const RobotTable = ({ robots }) => {
                     <thead>
                         <tr>
                             <th>ID</th>
-                            <th style={{ minWidth: '140px' }}>Location</th>
-                            <th style={{ minWidth: '140px' }}>Next Location</th>
+                            <th style={{ minWidth: '145px' }}>Location</th>
+                            <th style={{ minWidth: '145px' }}>Next Location</th>
                             <th>Stop</th>
                             <th>Enabled</th>
                             <th>Battery</th>
                             <th>Carrying</th>
-                            <th style={{ minWidth: '120px' }}>Product</th>
-                            <th style={{ minWidth: '120px' }}>Target</th>
+                            <th style={{ minWidth: '100px' }}>Product</th>
+                            <th style={{ minWidth: '140px' }}>Target</th>
                             <th>Priority</th>
                         </tr>
                     </thead>
