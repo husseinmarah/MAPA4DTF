@@ -22,7 +22,7 @@ public class TrustManagerAgent extends Agent {
 
     private static double INITIAL_TRUST_SCORE = 0;
     private static final double TRUST_THRESHOLD = 0.5; // Threshold below which agents are blocked
-    private static final double UNBLOCK_THRESHOLD = 0.7; // Threshold above which blocked agents are unblocked
+    private static final double UNBLOCK_THRESHOLD = 0.5; // Threshold above which blocked agents are unblocked
 
     private Map<String, Double> trustScores = new ConcurrentHashMap<>();
     private Map<String, String> agentStatuses = new ConcurrentHashMap<>(); // Track current status
@@ -166,12 +166,14 @@ public class TrustManagerAgent extends Agent {
             // NEW: Update shared service for UI
             milo.web.SharedTrustScoreService.updateTrustScore(agentName, score);
 
-            // Initialize status as "active" by default
-            agentStatuses.put(agentName, "active");
+            // Initialize status based on trust score to match threshold logic
+            String initialStatus = (score < TRUST_THRESHOLD) ? "blocked" : "active";
+            agentStatuses.put(agentName, initialStatus);
 
             System.out.println("┌─ INITIAL TRUST SCORE SET ───────────────────────");
             System.out.println("│  AGENT: " + agentName);
             System.out.println(String.format("│  SCORE: %.3f", score));
+            System.out.println("│  STATUS: " + initialStatus);
             System.out.println("└──────────────────────────────────────────────────");
 
         } catch (Exception e) {
