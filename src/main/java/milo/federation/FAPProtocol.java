@@ -93,8 +93,11 @@ public class FAPProtocol {
      */
     public interface FAPEventListener {
         void onAddressAllocated(FAPRecord record);
+
         void onAddressResolved(FAPRecord record);
+
         void onLeaseExpired(FAPRecord record);
+
         void onLeaseUpdated(FAPRecord record);
     }
 
@@ -117,12 +120,14 @@ public class FAPProtocol {
     private FederatedDirectoryService fdsIntegration;
     private FederationHealthMonitor healthMonitor;
     private List<FAPEventListener> eventListeners = new ArrayList<>();
+    private milo.eval.MetricsLogService metrics;
 
     /**
      * Constructor with default TTL
      */
     public FAPProtocol() {
         this(DEFAULT_TTL_MS);
+        this.metrics = milo.eval.MetricsLogService.getInstance();
     }
 
     /**
@@ -157,8 +162,8 @@ public class FAPProtocol {
      * FAP-ALLOC: Allocate a new Federation Fractal Address
      */
     public FAPResponse allocateAddress(AID requesterAid, String geo, String domain,
-                                       String level, String system, String component,
-                                       String capability, String qos) {
+            String level, String system, String component,
+            String capability, String qos) {
         try {
             // Validate input parameters
             if (requesterAid == null || geo == null || domain == null || capability == null) {
@@ -170,7 +175,7 @@ public class FAPProtocol {
             // Try to extract agent number from agent name (e.g., RobotAgent3 -> 3)
             String agentName = requesterAid.getLocalName();
             int instance = extractAgentNumber(agentName);
-            
+
             // If no number found in agent name, use global counter
             if (instance == -1) {
                 String counterKey = (system == null ? "SYS" : system) +
@@ -238,6 +243,7 @@ public class FAPProtocol {
      * FAP-RESOLVE: Resolve FFA string to agent AID
      */
     public FAPResponse resolveAddress(String ffaString) {
+        long start = System.nanoTime();
         try {
             if (ffaString == null || ffaString.trim().isEmpty()) {
                 return new FAPResponse(FAPResult.INVALID_REQUEST,
@@ -269,8 +275,14 @@ public class FAPProtocol {
                 healthMonitor.reportFAPResolution(record);
             }
 
-            return new FAPResponse(FAPResult.SUCCESS,
+            FAPResponse response = new FAPResponse(FAPResult.SUCCESS,
                     "(Resolved :ffa \"" + ffaString + "\" :aid \"" + record.aid.getName() + "\")", record);
+
+            long duration = System.nanoTime() - start;
+            if (metrics != null)
+                metrics.logLatency("discovery_latency_log.csv", "FFA_RESOLVE", duration, "ffa=" + ffaString);
+
+            return response;
 
         } catch (Exception e) {
             return new FAPResponse(FAPResult.FAILURE,
@@ -399,8 +411,7 @@ public class FAPProtocol {
                     params.get("system"),
                     params.get("component"),
                     params.get("capability"),
-                    params.get("qos")
-            );
+                    params.get("qos"));
 
         } catch (Exception e) {
             return new FAPResponse(FAPResult.INVALID_REQUEST,
@@ -558,9 +569,11 @@ public class FAPProtocol {
             }
         }
     }
-    
+
     /**
-     * Extract numeric suffix from agent name (e.g., RobotAgent3 -> 3, ConveyorAgent1 -> 1)
+     * Extract numeric suffix from agent name (e.g., RobotAgent3 -> 3,
+     * ConveyorAgent1 -> 1)
+     * 
      * @param agentName The agent name
      * @return The numeric suffix, or -1 if not found
      */
@@ -568,7 +581,7 @@ public class FAPProtocol {
         if (agentName == null || agentName.isEmpty()) {
             return -1;
         }
-        
+
         // Find last sequence of digits in the name
         String digits = "";
         for (int i = agentName.length() - 1; i >= 0; i--) {
@@ -580,11 +593,11 @@ public class FAPProtocol {
                 break;
             }
         }
-        
+
         if (digits.isEmpty()) {
             return -1;
         }
-        
+
         try {
             return Integer.parseInt(digits);
         } catch (NumberFormatException e) {

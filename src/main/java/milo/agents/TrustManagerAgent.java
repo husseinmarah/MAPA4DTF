@@ -28,12 +28,14 @@ public class TrustManagerAgent extends Agent {
     private Map<String, String> agentStatuses = new ConcurrentHashMap<>(); // Track current status
     private OPAClient opaClient;
     private milo.security.KeycloakClient keycloakClient;
+    private milo.eval.MetricsLogService metrics;
 
     @Override
     protected void setup() {
         System.out.println("✅ " + getLocalName() + " ready (Dynamic Trust Management active)");
         opaClient = new OPAClient();
         keycloakClient = new milo.security.KeycloakClient();
+        metrics = milo.eval.MetricsLogService.getInstance();
         registerWithDF();
 
         addBehaviour(new TrustManagementBehaviour());
@@ -113,6 +115,9 @@ public class TrustManagerAgent extends Agent {
 
             trustScores.put(agentName, newScore);
 
+            // Log trust update for evaluation
+            metrics.logTrustUpdate("trust_dynamics_log.csv", agentName, newScore, outcome);
+
             // NEW: Update score in Keycloak
             boolean success = keycloakClient.updateUserTrustScore(agentName, newScore);
             if (success) {
@@ -185,8 +190,8 @@ public class TrustManagerAgent extends Agent {
      * Dynamically update agent status based on trust score thresholds
      * 
      * @param agentName Agent to update
-     * @param oldScore Previous trust score
-     * @param newScore New trust score
+     * @param oldScore  Previous trust score
+     * @param newScore  New trust score
      */
     private void updateAgentStatusBasedOnTrust(String agentName, double oldScore, double newScore) {
         try {
@@ -197,13 +202,14 @@ public class TrustManagerAgent extends Agent {
             if (newScore < TRUST_THRESHOLD && "active".equals(currentStatus)) {
                 newStatus = "blocked";
                 boolean success = keycloakClient.updateUserStatus(agentName, newStatus);
-                
+
                 if (success) {
                     agentStatuses.put(agentName, newStatus);
                     System.out.println("┌─ AGENT STATUS CHANGED ────────────────────────────");
                     System.out.println("│  🚫 AGENT: " + agentName);
                     System.out.println("│  STATUS: active -> blocked");
-                    System.out.println(String.format("│  REASON: Trust score %.3f < threshold %.3f", newScore, TRUST_THRESHOLD));
+                    System.out.println(
+                            String.format("│  REASON: Trust score %.3f < threshold %.3f", newScore, TRUST_THRESHOLD));
                     System.out.println("└──────────────────────────────────────────────────");
                 } else {
                     System.err.println("❌ Failed to update status for " + agentName + " in Keycloak");
@@ -213,13 +219,14 @@ public class TrustManagerAgent extends Agent {
             else if (newScore >= UNBLOCK_THRESHOLD && "blocked".equals(currentStatus)) {
                 newStatus = "active";
                 boolean success = keycloakClient.updateUserStatus(agentName, newStatus);
-                
+
                 if (success) {
                     agentStatuses.put(agentName, newStatus);
                     System.out.println("┌─ AGENT STATUS CHANGED ────────────────────────────");
                     System.out.println("│  ✅ AGENT: " + agentName);
                     System.out.println("│  STATUS: blocked -> active");
-                    System.out.println(String.format("│  REASON: Trust score %.3f >= threshold %.3f", newScore, UNBLOCK_THRESHOLD));
+                    System.out.println(String.format("│  REASON: Trust score %.3f >= threshold %.3f", newScore,
+                            UNBLOCK_THRESHOLD));
                     System.out.println("└──────────────────────────────────────────────────");
                 } else {
                     System.err.println("❌ Failed to update status for " + agentName + " in Keycloak");
