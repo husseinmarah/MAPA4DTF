@@ -18,7 +18,8 @@ import java.util.concurrent.TimeUnit;
  * OPA (Open Policy Agent) Client
  * <p>
  * Integrates with OPA to enforce authorization policies defined in policy.rego.
- * Evaluates policy decisions for agent communications, federation access, and resource usage.
+ * Evaluates policy decisions for agent communications, federation access, and
+ * resource usage.
  */
 public class OPAClient {
 
@@ -33,6 +34,7 @@ public class OPAClient {
 
     // create singleton instance
     private static OPAClient instance;
+
     public static OPAClient getInstance() {
         if (instance == null) {
             instance = new OPAClient();
@@ -48,6 +50,7 @@ public class OPAClient {
     public double getTrustThreshold() {
         return trustThreshold;
     }
+
     /**
      * Create OPA client with default URL
      */
@@ -114,7 +117,8 @@ public class OPAClient {
      */
     public PolicyDecision evaluateCommunicationPolicy(
             String senderName, String senderOrg, String senderRole, double senderTrustScore, String senderStatus,
-            String receiverName, String receiverOrg, String receiverRole, double receiverTrustScore, String receiverStatus, String action) {
+            String receiverName, String receiverOrg, String receiverRole, double receiverTrustScore,
+            String receiverStatus, String action) {
 
         try {
             // Build OPA input JSON
@@ -143,8 +147,7 @@ public class OPAClient {
             // Send request to OPA
             RequestBody body = RequestBody.create( // This is an okhttp3.RequestBody
                     requestBody.toString(),
-                    MediaType.parse("application/json")
-            );
+                    MediaType.parse("application/json"));
 
             Request request = new Request.Builder()
                     .url(opaUrl)
@@ -167,32 +170,34 @@ public class OPAClient {
 
                 boolean allowed = jsonResponse.optBoolean("result", false); // Using org.json.JSONObject here
 
-                String reason = allowed ?
-                        "OPA policy allows communication" :
-                        "OPA policy denies communication";
+                String reason = allowed ? "OPA policy allows communication" : "OPA policy denies communication";
 
                 if (senderName.equals(receiverName)) {
                     assert true; // Skip self-communication logging
                 } else {
                     // Print detailed OPA policy evaluation box
-                    System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
-                    System.out.println("│  " + (allowed ? "✅ ALLOWED" : "❌ DENIED"));
-                    System.out.println("│  --- SOURCE ---");
-                    System.out.println("│  Time:        " + Instant.now());
-                    System.out.println("│  From:        " + senderName + " (" + senderOrg + ")");
-                    System.out.println("│  To:          " + receiverName + " (" + receiverOrg + ")");
-                    System.out.println("│  Role:        " + senderRole);
-                    System.out.println("│  Trust Score: " + senderTrustScore);
-                    System.out.println("│  Source FFA:  " + FederationHelper.getAgentFFA(senderName));
-                    System.out.println("│  --- TARGET ---");
-                    System.out.println("│  Target FFA:  " + FederationHelper.getAgentFFA(receiverName));
+                    // System.out.println("┌─ OPA POLICY EVALUATION ──────────────────────────");
+                    // System.out.println("│ " + (allowed ? "✅ ALLOWED" : "❌ DENIED"));
+                    // System.out.println("│ --- SOURCE ---");
+                    // System.out.println("│ Time: " + Instant.now());
+                    // System.out.println("│ From: " + senderName + " (" + senderOrg + ")");
+                    // System.out.println("│ To: " + receiverName + " (" + receiverOrg + ")");
+                    // System.out.println("│ Role: " + senderRole);
+                    // System.out.println("│ Trust Score: " + senderTrustScore);
+                    // System.out.println("│ Source FFA: " +
+                    // FederationHelper.getAgentFFA(senderName));
+                    // System.out.println("│ --- TARGET ---");
+                    // System.out.println("│ Target FFA: " +
+                    // FederationHelper.getAgentFFA(receiverName));
 
                     // Determine and add federation type
-                    String federationType = determineFederationType(FederationHelper.getAgentFFA(senderName), FederationHelper.getAgentFFA(receiverName));
-                    System.out.println("│  Federation:  " + federationType);
+                    // String federationType =
+                    // determineFederationType(FederationHelper.getAgentFFA(senderName),
+                    // FederationHelper.getAgentFFA(receiverName));
+                    // System.out.println("│ Federation: " + federationType);
 
-                    System.out.println("│  Reason: " + reason);
-                    System.out.println("└──────────────────────────────────────────────────");
+                    // System.out.println("│ Reason: " + reason);
+                    // System.out.println("└──────────────────────────────────────────────────");
                 }
                 return new PolicyDecision(allowed, reason, requestBody.toString());
             }
@@ -213,7 +218,8 @@ public class OPAClient {
     }
 
     /**
-     * Determines the type of federation (Vertical or Horizontal) based on agent FFAs.
+     * Determines the type of federation (Vertical or Horizontal) based on agent
+     * FFAs.
      *
      * @param sourceFFA The Federation Fractal Address of the source agent.
      * @param targetFFA The Federation Fractal Address of the target agent.
@@ -282,8 +288,7 @@ public class OPAClient {
 
         return evaluateCommunicationPolicy(
                 agentName, agentOrg, agentRole, agentTrustScore, agentStatus,
-                "FederationManager", federationId, "federation_manager", 1.0, "active", "join_federation"
-        );
+                "FederationManager", federationId, "federation_manager", 1.0, "active", "join_federation");
     }
 
     /**
@@ -303,20 +308,22 @@ public class OPAClient {
 
         return evaluateCommunicationPolicy(
                 agentName, agentOrg, agentRole, agentTrustScore, agentStatus,
-                "ResourceManager", "main", "manager", 1.0, "active", "allocate_resource"
-        );
+                "ResourceManager", "main", "manager", 1.0, "active", "allocate_resource");
     }
 
     /**
      * Evaluate trust score update policy.
      *
      * @param currentScore The agent's current trust score.
-     * @param outcome      The outcome of the last interaction (e.g., "SUCCESS", "FAILURE").
+     * @param outcome      The outcome of the last interaction (e.g., "SUCCESS",
+     *                     "FAILURE").
      * @param decayFactor  The factor by which the old score decays.
      * @param learningRate The rate at which the new outcome influences the score.
-     * @return The newly calculated trust score. Returns the current score on failure.
+     * @return The newly calculated trust score. Returns the current score on
+     *         failure.
      */
-    public double evaluateTrustScoreUpdate(double currentScore, String outcome, double decayFactor, double learningRate) {
+    public double evaluateTrustScoreUpdate(double currentScore, String outcome, double decayFactor,
+            double learningRate) {
         String trustOpaUrl = opaUrl.replace("/allow", "/evaluate_trust");
 
         try {
@@ -337,8 +344,7 @@ public class OPAClient {
 
             RequestBody body = RequestBody.create(
                     requestBody.toString(),
-                    MediaType.parse("application/json")
-            );
+                    MediaType.parse("application/json"));
 
             Request request = new Request.Builder()
                     .url(trustOpaUrl)
