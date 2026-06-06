@@ -8,8 +8,8 @@
     <artifactId>mas-fed-dt</artifactId>
     <version>1.0.0-SNAPSHOT</version>
 
-    <name>Multi-Agent Federated Digital Twins</name>
-    <description>An implementation of multi-agent driven federation in digital twins with policy management</description>
+    <name>MAPA4DTF</name>
+    <description>Multi-Agent Policy-Aware for Digital Twin Federation</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
