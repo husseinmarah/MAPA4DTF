@@ -6,6 +6,12 @@ import Dashboard from './components/Dashboard';
 import TrustScoreCard from './components/TrustScoreCard';
 import './App.css';
 
+/**
+ * Main dashboard application shell.
+ *
+ * Streams live system state from the backend websocket and coordinates the
+ * robot, conveyor, properties, and trust score views.
+ */
 function App() {
     const [data, setData] = useState(null);
 

@@ -1,13 +1,20 @@
 import React from 'react';
 
-const Dashboard = ({ robots, conveyors }) => {
-    const totalRobots = robots ? robots.length : 0;
-    const activeRobots = robots ? robots.filter(r => r.enabled && !r.stop).length : 0;
-    const avgBattery = robots && robots.length > 0
-        ? Math.round(robots.reduce((acc, r) => acc + r.batteryLevel, 0) / robots.length)
+/**
+ * Summary metrics for the live robot and conveyor state.
+ *
+ * @param {Object} props Component props.
+ * @param {Array} [props.robots=[]] Current robot records.
+ * @param {Array} [props.conveyors=[]] Current conveyor records.
+ */
+const Dashboard = ({ robots = [], conveyors = [] }) => {
+    const totalRobots = robots.length;
+    const activeRobots = robots.filter((robot) => robot.enabled && !robot.stop).length;
+    const avgBattery = robots.length > 0
+        ? Math.round(robots.reduce((accumulator, robot) => accumulator + robot.batteryLevel, 0) / robots.length)
         : 0;
-    const totalConveyors = conveyors ? conveyors.length : 0;
-    const producedCount = conveyors ? conveyors.filter(c => c.produced).length : 0;
+    const totalConveyors = conveyors.length;
+    const producedCount = conveyors.filter((conveyor) => conveyor.produced).length;
 
     return (
         <div className="dashboard-grid">

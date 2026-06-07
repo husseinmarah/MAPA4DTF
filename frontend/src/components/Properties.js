@@ -1,6 +1,12 @@
 import React from 'react';
 
-const Properties = ({ properties }) => {
+/**
+ * Displays the raw system property payloads returned by the backend.
+ *
+ * @param {Object} props Component props.
+ * @param {Object} [props.properties={}] Property payloads grouped by source.
+ */
+const Properties = ({ properties = {} }) => {
     return (
         <div className="card">
             <h2 className="section-title">System Properties</h2>

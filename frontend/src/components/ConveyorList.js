@@ -1,7 +1,13 @@
 import React from 'react';
 import axios from 'axios';
 
-const ConveyorList = ({ conveyors }) => {
+/**
+ * Renders conveyor state and allows toggling the produced flag.
+ *
+ * @param {Object} props Component props.
+ * @param {Array} [props.conveyors=[]] Conveyor records to render.
+ */
+const ConveyorList = ({ conveyors = [] }) => {
 
     const handleProducedChange = (id, produced) => {
         axios.post(`/api/v1/conveyors/${id}/produced`, { produced });

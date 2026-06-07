@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 
-const TrustScoreCard = ({ trustScores, onUpdateScore }) => {
+/**
+ * Displays and edits trust scores for each agent.
+ *
+ * @param {Object} props Component props.
+ * @param {Object} [props.trustScores={}] Trust scores keyed by agent name.
+ * @param {Function} props.onUpdateScore Callback that persists updates.
+ */
+const TrustScoreCard = ({ trustScores = {}, onUpdateScore }) => {
     const [editingAgent, setEditingAgent] = useState(null);
     const [editValue, setEditValue] = useState('');
 

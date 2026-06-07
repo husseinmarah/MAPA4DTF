@@ -1,7 +1,16 @@
 import React from 'react';
 import axios from 'axios';
 
-const RobotTable = ({ robots }) => {
+/**
+ * Editable table for the robot fleet.
+ *
+ * The table sends small update requests back to the API when a user changes
+ * stop state, target, or priority.
+ *
+ * @param {Object} props Component props.
+ * @param {Array} [props.robots=[]] Robot records to render.
+ */
+const RobotTable = ({ robots = [] }) => {
 
     const handleStopChange = (id, stop) => {
         axios.post(`/api/v1/robots/${id}/stop`, { stop });
