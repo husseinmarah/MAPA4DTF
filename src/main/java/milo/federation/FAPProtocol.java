@@ -10,9 +10,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * Federation Address Protocol (FAP) Implementation
+ * Federation Address Protocol (FAP) Implementation (a.k.a. Federation Context Protocol - FCP-Protocol)
  *
- * Provides core FAP functionality separated from agent implementation:
+ * Provides core FAP (a.k.a. FCP) functionality separated from agent implementation:
  * - FAP-ALLOC: Address allocation with unique instance numbering
  * - FAP-RESOLVE: Address resolution from FFA to AID
  * - FAP-UPDATE: Lease renewal and maintenance

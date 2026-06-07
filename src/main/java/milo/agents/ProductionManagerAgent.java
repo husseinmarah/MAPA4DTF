@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Production Agent Manager - Coordinates and manages manufacturing agents
  * Handles task assignment, status monitoring, and acknowledgement tracking
- * Integrates with Federation Address Protocol (FAP) for agent coordination
+ * Integrates with Federation Address Protocol (FAP a.k.a. FCP) for agent coordination
  */
 public class ProductionManagerAgent extends Agent {
 

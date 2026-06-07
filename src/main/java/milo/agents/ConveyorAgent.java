@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Template-configurable Conveyor Agent with Federation Support
  * Each agent instance manages a specific conveyor based on its ID
- * Integrates with Federation Address Protocol (FAP) and Federation Fractal
+ * Integrates with Federation Address Protocol (FAP a.k.a. FCP) and Federation Functional
  * Address (FFA)
  */
 public class ConveyorAgent extends Agent {
