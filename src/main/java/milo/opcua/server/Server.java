@@ -24,10 +24,13 @@ import static org.eclipse.milo.opcua.stack.core.types.builtin.LocalizedText.engl
 
 /**
  * Main server launcher for the federated multi-agent system with policy
- * enforcement
+ * enforcement.
  */
 public class Server {
 
+    /**
+     * Starts the OPC-UA server, Spring web application, agent container, and frontend.
+     */
     public static void main(final String[] args) throws Exception {
         System.setProperty("java.awt.headless", "false");
         System.setProperty("java.net.preferIPv4Stack", "true");
@@ -67,6 +70,9 @@ public class Server {
     }
 
 
+    /**
+     * Launches the React frontend from the local frontend directory.
+     */
     private static void startFrontend() {
         Thread frontendThread = new Thread(() -> {
             try {
@@ -114,6 +120,11 @@ public class Server {
         frontendThread.start();
     }
 
+    /**
+     * Builds and starts the embedded OPC-UA server and registers the namespace.
+     *
+     * The certificate validator is intentionally permissive in this local setup.
+     */
     private static CustomNamespace startOpcUaServer() throws Exception {
         final OpcUaServerConfigBuilder builder = new OpcUaServerConfigBuilder();
 
@@ -141,10 +152,12 @@ public class Server {
         builder.setCertificateValidator(new ServerCertificateValidator() {
             @Override
             public void validateCertificateChain(List<X509Certificate> list, String s) throws UaException {
+                // Intentionally accept the certificate chain for the local dev server.
             }
 
             @Override
             public void validateCertificateChain(List<X509Certificate> list) throws UaException {
+                // Intentionally accept the certificate chain for the local dev server.
             }
         });
 

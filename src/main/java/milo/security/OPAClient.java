@@ -30,7 +30,7 @@ public class OPAClient {
     private java.util.Map<String, String> componentRoles;
     private JSONArray federationRules;
 
-    public double trustThreshold;
+    public double trustThreshold = 0.5;
 
     // create singleton instance
     private static OPAClient instance;
@@ -39,7 +39,6 @@ public class OPAClient {
         if (instance == null) {
             instance = new OPAClient();
         }
-        instance.setTrustThreshold(0.5);
         return instance;
     }
 

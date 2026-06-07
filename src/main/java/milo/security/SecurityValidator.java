@@ -6,8 +6,10 @@ import java.util.HashSet;
 import java.util.Arrays;
 
 /**
- * Modular security validator for federation policies
- * Separates validation logic from security manager for better testability
+ * Validates message, service, and cross-company access rules for federation use.
+ *
+ * The validator keeps policy checks isolated from the broader security managers so
+ * the rules can be reasoned about and tested independently.
  */
 public class SecurityValidator {
     
@@ -15,19 +17,19 @@ public class SecurityValidator {
     private final Set<String> basicServices;
     private final Set<String> federationServices;
     
+    /**
+     * Creates the default whitelist and service sets used by the validator.
+     */
     public SecurityValidator() {
-        // Initialize system agents whitelist
         systemAgents = new HashSet<>(Arrays.asList(
             "ProductionManager", "FAM", "FederationAddressManager", 
             "DF", "AMS", "df", "ams"
         ));
         
-        // Initialize basic services available to all
         basicServices = new HashSet<>(Arrays.asList(
             "status", "heartbeat", "registration"
         ));
         
-        // Initialize federation-specific services
         federationServices = new HashSet<>(Arrays.asList(
             "capability-discovery", "task-execution", "collaboration",
             "federation-status", "workflow-coordination"
@@ -35,7 +37,7 @@ public class SecurityValidator {
     }
     
     /**
-     * Validate if an agent can access a specific service
+     * Validates whether an agent can access a specific service.
      */
     public ValidationResult validateServiceAccess(String agentName, String serviceName, 
                                                  FederationSecurityManager.SecurityContext context, 
@@ -66,7 +68,7 @@ public class SecurityValidator {
     }
     
     /**
-     * Validate cross-company communication
+        * Validates whether two security contexts may communicate across companies.
      */
     public ValidationResult validateCrossCommunication(FederationSecurityManager.SecurityContext source,
                                                       FederationSecurityManager.SecurityContext target) {
@@ -99,7 +101,7 @@ public class SecurityValidator {
     }
     
     /**
-     * Validate message content and type
+        * Validates a message payload for obvious suspicious patterns and size.
      */
     public ValidationResult validateMessage(ACLMessage message) {
         if (message == null) {
@@ -123,7 +125,7 @@ public class SecurityValidator {
     }
     
     /**
-     * Check if agent is a system agent
+     * Returns whether the agent name matches one of the reserved system agents.
      */
     public boolean isSystemAgent(String agentName) {
         if (agentName == null) return false;
@@ -133,7 +135,7 @@ public class SecurityValidator {
     }
     
     /**
-     * Validate security level-based service access
+        * Applies security-level rules for non-basic service access.
      */
     private ValidationResult validateSecurityLevelAccess(String serviceName, 
                                                         FederationSecurityManager.SecurityLevel level) {
@@ -152,7 +154,7 @@ public class SecurityValidator {
     }
     
     /**
-     * Validation result wrapper
+        * Immutable validation result wrapper.
      */
     public static class ValidationResult {
         public final boolean allowed;

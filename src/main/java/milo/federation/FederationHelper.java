@@ -20,7 +20,9 @@ import java.util.*;
  */
 public class FederationHelper {
 
-    // Cache for agent FFAs to avoid repeated lookups
+    /**
+     * Cache for agent FFAs to avoid repeated lookups.
+     */
     private static final Map<String, String> ffaCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
@@ -216,7 +218,7 @@ public class FederationHelper {
                 return results[0].getName();
             }
 
-            // Fallback to known name
+            // Fall back to the conventional local name when the DF lookup fails.
             return new AID("FederationAddressManager", AID.ISLOCALNAME);
 
         } catch (FIPAException e) {
