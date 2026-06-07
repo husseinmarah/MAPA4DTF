@@ -4,7 +4,7 @@ Multi-Agent Policy-Aware for Digital Twin Federation.
 
 ## Overview
 
-MAPA4DTF is a proof of concept platform for implementing multi-agent policy-aware digital twin federation. The uses Java backend, a React dashboard, Docker-based security services based on [Keycloak](https://www.keycloak.org/) for identity and access management, [Open Agent Policy](https://www.openpolicyagent.org/) for streamlines policy enforcement and management across the federation, and [Visual Components](https://www.visualcomponents.com/) for environment simulation.
+MAPA4DTF is a proof-of-concept platform for implementing multi-agent policy-aware digital twin federation. The platform uses a Java backend that leverages [JAVA Agent DEvelopment Framework](https://jade.tilab.com/) for realizing of multi-agent systems through a middle-ware that complies with the FIPA specifications. The policy-aware concept is supported via Docker-based security services that provide [Keycloak](https://www.keycloak.org/) for identity and access management, [Open Agent Policy](https://www.openpolicyagent.org/) for streamlined policy enforcement and management across the federation, and [Visual Components](https://www.visualcomponents.com/) for environment simulation. In addition, the platform provides a monitoring and control dashboard (for controlling trust scores and robot status) for a developed case study (Warehouse Multi-robot System) built with the React framework.
 
 It includes:
 
