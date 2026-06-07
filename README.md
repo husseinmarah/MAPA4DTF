@@ -24,6 +24,10 @@ It includes:
 - `src/main/resources/` - backend resources
 - `vs-simulation/` - Visual Components simulation scripts
 
+## Proof of Concept
+
+![Demo video](/asset/demo_video.gif)
+
 ## Quick Start
 
 1. Start the security stack:
