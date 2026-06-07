@@ -121,10 +121,6 @@ Use this flow to start the simulation environment and connect it to the backend:
 |---|---:|
 | Keycloak Docker image | 21.1.1 |
 | OPA Docker image | 1.10.1 |
-| OPC UA server port | 4840 |
-| Keycloak port | 8080 |
-| OPA port | 8181 |
-| Frontend port | 3000 |
 
 ## Prerequisites
 
@@ -228,6 +224,21 @@ The frontend shows:
 3. JADE agents are created through the application bootstrap.
 4. The frontend is launched from the Java process via the `frontend/` directory.
 
+### Visual Components
+
+The Visual Components runs the simulation [Simulation_Source_Script.py](vs-simulation/Simulation_Source_Script.py). Also, it uses OPC-UA protocol that is exposed on port 
+
+### List of Service Ports and Addresses
+
+| Service | Port | Address |
+|---|---:|---:|
+| OPC UA server port | 4840 | http://localhost:4840/ |
+| Keycloak port | 8080 | http://localhost:8080/ |
+| OPA port | 8181 | http://localhost:8181/ |
+| Frontend port | 3000 | http://localhost:3000/ |
+
+
+
 ## Evaluation and Analysis Scripts
 
 The repository also includes:
@@ -242,7 +253,7 @@ These scripts are intended for simulation and analysis workflows.
 ## Repository Structure
 
 - `cmd/` - startup and restart scripts
-- `configs/` - Visual Components and backend configuration files
+- `configs/` - Visual Components and simulation configuration files
 - `evaluation_scripts/` - Python analysis scripts
 - `frontend/` - React application
 - `opa/` - policy files for OPA
