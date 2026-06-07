@@ -37,3 +37,6 @@ MTPs-Main-Container.txt
 .env
 
 /frontend/node_modules/*
+
+# Ignore vscode settings
+.vscode/*
