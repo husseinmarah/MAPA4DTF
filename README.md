@@ -95,6 +95,23 @@ Use this flow to start the simulation environment and connect it to the backend:
 7. Select the imported server and click **Connect**.
 8. Start the simulation playback. The backend and Visual Components scene should synchronize automatically.
 
+## Machine Specification
+
+ | Component | Specification |
+ |---|---|
+ | Processor (CPU) | 11th Gen Intel Core i7-11850H @ 2.50GHz, 2496 Mhz |
+ | Number of Cores/Threads | 8 Cores / 16 Logical Processor(s) |
+ | Memory (RAM) | 32 GB DDR4 @ 3200 MHz |
+ | Storage | 500 GB SSD |
+ | Operating System | Microsoft Windows 11 Pro |
+ | Graphics Card (GPU) | Intel(R) UHD Graphics Family GFX Core 600 Mhz |
+ | Network Adapter | Intel(R) Wi-Fi 6E AX210 160MHz |
+ | Link Speed (Receive/Transmit) | 866/866 (Mbps) |
+ | IDE Software | IntelliJ IDEA / PyCharm |
+ | Java Compiler | Java OpenJDK 11 / Java OpenJDK 21 |
+ | Python Interpreter | Python 3.10 |
+ | Platform/Tool Used | Jade 4.5.0 |
+
 ## Versions Used
 
 ### Backend and Runtime
@@ -125,6 +142,13 @@ Use this flow to start the simulation environment and connect it to the backend:
 |---|---:|
 | Keycloak Docker image | 21.1.1 |
 | OPA Docker image | 1.10.1 |
+
+### Simulation
+
+| Component | Version |
+|---|---:|
+| Visual Components | 4.10 |
+| Eclipse Milo (OPC-UA) | 0.6.9 |
 
 ## Prerequisites
 
