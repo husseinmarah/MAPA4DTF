@@ -3,7 +3,7 @@ import sys, os
 sys.path.append(os.path.dirname(__file__))
 
 # Import all scripts and functions from the source file - GIVE YOUR OWN COMPUTER PATH
-exec(open(r'c:\Users\UserName\Desktop\CaseStudy\VCSimulation\Simulation_Source_Script.py').read())
+exec(open(r'YOUR_PROJECT_PATH\vs-simulation\Simulation_Source_Script.py').read())
 
 # SYSTEM CONFIGURATION
 VISUAL_COMPONENTS_VERSIONS = ["4.10"]
