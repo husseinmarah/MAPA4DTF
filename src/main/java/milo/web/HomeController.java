@@ -4,6 +4,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+/**
+ * Lightweight status endpoint that serves the backend landing page.
+ */
 public class HomeController {
 
     @GetMapping("/")
@@ -43,7 +46,7 @@ public class HomeController {
                         <h1>Backend API is running ✔️</h1>
                         <p>Please access the Frontend UI at:</p>
                         <p>
-                            <a href="http://localhost:3000" target="_blank">
+                                <a href="http://localhost:3000" target="_blank" rel="noopener noreferrer">
                                 http://localhost:3000
                             </a>
                         </p>

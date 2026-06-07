@@ -1,5 +1,8 @@
 package milo.web.data;
 
+/**
+ * Data transfer object describing the current state of a robot in the UI.
+ */
 public class RobotDTO {
     private int id;
     private String location;
@@ -25,7 +28,6 @@ public class RobotDTO {
         this.priority = priority;
     }
 
-    // Getters and setters
     public int getId() {
         return id;
     }

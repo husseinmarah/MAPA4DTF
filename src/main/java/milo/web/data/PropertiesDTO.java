@@ -1,5 +1,8 @@
 package milo.web.data;
 
+/**
+ * Data transfer object holding raw property payloads for the dashboard.
+ */
 public class PropertiesDTO {
     private String pathwayProperties;
     private String idleProperties;
@@ -11,7 +14,6 @@ public class PropertiesDTO {
         this.outputConveyorProperties = outputConveyorProperties;
     }
 
-    // Getters and setters
     public String getPathwayProperties() {
         return pathwayProperties;
     }
