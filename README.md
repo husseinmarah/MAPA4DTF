@@ -108,7 +108,7 @@ Use this flow to start the simulation environment and connect it to the backend:
  | Network Adapter | Intel(R) Wi-Fi 6E AX210 160MHz |
  | Link Speed (Receive/Transmit) | 866/866 (Mbps) |
  | IDE Software | IntelliJ IDEA / PyCharm |
- | Java Compiler | Java JDK 17 |
+ | Java Compiler | Java (JDK/JVM) 17 |
  | Python Interpreter | Python 3.10 |
  | Platform/Tool Used | Jade 4.5.0 |
 
