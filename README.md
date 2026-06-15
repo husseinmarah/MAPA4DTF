@@ -60,6 +60,22 @@ Key packages:
 - OPA provides policy enforcement and decision support
 - the Java security managers coordinate local fallback behavior when external services are unavailable
 
+
+**Control Panel Interface:**
+The first figure of control dashboard shows trust score and other variables of the multi-robot use case.
+![Control Panel 1](/asset/control_panel_1.png)
+
+The second figure highlights the change in the trust score that in real-world scenario represents unstable behaviour of an agent.
+![Control Panel 2](/asset/control_panel_2.png)
+
+
+**Keycloak Trust Score Configuration Examples:**
+The following figure shows the trust score in Keycloak before change and before the policy is enforced.
+![Trust Score Keycloak 1](/asset/trust_score_keycloak_1.png)
+
+The second figure shows trust score decreased after the agent showing unreliable behavouir.
+![Trust Score Keycloak 2](/asset/trust_score_keycloak_2.png)
+
 ### OPC UA Server
 
 The OPC UA server is started from [src/main/java/milo/opcua/server/Server.java](src/main/java/milo/opcua/server/Server.java). It:
@@ -68,6 +84,10 @@ The OPC UA server is started from [src/main/java/milo/opcua/server/Server.java](
 - starts the Spring Boot web application
 - starts the JADE container
 - launches the frontend process
+
+**OPC UA Variables Configuration:**
+The following figure shows the mapping of the variables with OPC-UA server of the Visual Components.
+![OPC UA Variables](/asset/opcu_variables.png)
 
 ### Frontend
 
