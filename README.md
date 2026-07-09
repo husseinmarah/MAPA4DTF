@@ -54,6 +54,63 @@ Key packages:
 - [milo.federation](src/main/java/milo/federation)
 - [milo.agents](src/main/java/milo/agents)
 
+### Federation Address Integration (FFA & FCP)
+
+The platform achieves **semantic decoupling** by separating an agent's logical identity from its network location. This is implemented by bridging the Federated Functional Address (FFA) with JADE Agent Identifiers (AIDs) through the Federation Context Protocol (FCP).
+
+#### Architecture & Dereferencing
+The logical FFA serves as a persistent name, while the JADE AID acts as the physical transport locator. The Federation Address Manager (FAM) seamlessly dereferences the FFA at runtime.
+
+```mermaid
+graph TD
+    subgraph logical [Logical Identity]
+        FFA["FFA urn:dtf:EU:Plant:Robot-1-Move"]
+    end
+
+    subgraph infrastructure [Federation Infrastructure]
+        FAM["Federation Address Manager"]
+        Helper["FederationHelper"]
+    end
+
+    subgraph physical [Physical Transport]
+        AID["JADE AID RobotAgent"]
+        DF["JADE Directory Facilitator"]
+    end
+
+    FFA -->|Dereferenced by| FAM
+    FAM -->|Resolves to| AID
+    Helper -->|1. Register or Query| DF
+    DF -->|2. Maps Properties to| AID
+    Helper -->|3. Resolves Address| FAM
+```
+
+#### Capability Discovery & Routing Workflow
+Instead of rigid point-to-point orchestration, agents discover each other based on capabilities embedded as properties in the standard JADE Directory Facilitator (DF).
+
+```mermaid
+sequenceDiagram
+    participant A as Agent A
+    participant DF as Directory Facilitator
+    participant FAM as Federation Address Manager
+    participant B as Agent B
+
+    Note over B: Holds JADE AID and Assigned FFA
+    
+    B->>DF: Register Service
+    
+    Note over A: Search for MaterialHandling
+    A->>DF: Search Services
+    DF-->>A: Return DFAgentDescription
+    
+    Note over A: Dereference target FFA
+    A->>FAM: FCP-Resolve targetFFA
+    FAM-->>A: Return concrete JADE AID
+    
+    A->>B: Send Direct Message
+```
+
+**Important Note:** The Federation Functional Address (FFA) is assigned to the agent (digital twin) as an identifier after there is a need to federate with other agents (digital twins). The FFA is used to provide **context** and **functional information** for enabling more efficient interactions between twins in the federation.
+
 ### Security Services
 
 - Keycloak provides identity and authentication
