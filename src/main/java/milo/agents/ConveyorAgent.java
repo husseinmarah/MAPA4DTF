@@ -29,8 +29,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * Template-configurable Conveyor Agent with Federation Support
  * Each agent instance manages a specific conveyor based on its ID
- * Integrates with Federation Address Protocol (FAP a.k.a. FCP) and Federation Functional
- * Address (FFA)
+ * Integrates with Federation Address Protocol (FAP a.k.a. Federation Context
+ * Protocol (FCP)) and Federation Functional Address (FFA)
  */
 public class ConveyorAgent extends Agent {
 
@@ -621,8 +621,10 @@ public class ConveyorAgent extends Agent {
                 System.out.println("│  Status:   Produced → false");
                 System.out.println("└──────────────────────────────────────────────────");
                 // TRUST SCORE UPDATE: Report SUCCESS for product pickup
-                // Trust updates reflect the conveyor's own performance (successfully made product available)
-                // Independent from robot performance - robot failures don't affect conveyor trust
+                // Trust updates reflect the conveyor's own performance (successfully made
+                // product available)
+                // Independent from robot performance - robot failures don't affect conveyor
+                // trust
                 sendTrustUpdate("SUCCESS");
             }
         } catch (Exception e) {
@@ -1403,7 +1405,8 @@ public class ConveyorAgent extends Agent {
         // Check if robot is already in queue
         for (RobotQueueEntry entry : pickupQueue) {
             if (entry.robotAgent.equals(robotAgent)) {
-                System.out.println("⚠️ " + agentName + " - " + robotAgent + " already in pickup queue (position: " + (new java.util.ArrayList<>(pickupQueue).indexOf(entry) + 1) + ")");
+                System.out.println("⚠️ " + agentName + " - " + robotAgent + " already in pickup queue (position: "
+                        + (new java.util.ArrayList<>(pickupQueue).indexOf(entry) + 1) + ")");
                 return;
             }
         }
@@ -1436,14 +1439,15 @@ public class ConveyorAgent extends Agent {
      * Check if robot is next in queue and allow pickup
      */
     public synchronized boolean canPickup(String robotAgent) {
-        System.out.println("🔍 " + getLocalName() + " - canPickup() called: robot=" + robotAgent + ", currentPicker=" + currentPickingRobot + ", queueSize=" + pickupQueue.size());
-        
+        System.out.println("🔍 " + getLocalName() + " - canPickup() called: robot=" + robotAgent + ", currentPicker="
+                + currentPickingRobot + ", queueSize=" + pickupQueue.size());
+
         // If this robot is the current picker
         if (robotAgent.equals(currentPickingRobot)) {
             System.out.println("✅ " + getLocalName() + " - " + robotAgent + " is current picker (already authorized)");
             return true;
         }
-        
+
         // If no current picker, check if this robot is first in queue
         if (currentPickingRobot == null && !pickupQueue.isEmpty()) {
             RobotQueueEntry next = pickupQueue.peek();
@@ -1451,12 +1455,14 @@ public class ConveyorAgent extends Agent {
                 currentPickingRobot = robotAgent;
                 pickupQueue.poll(); // Remove from queue
 
-                System.out.println("✅ " + getLocalName() + " - " + robotAgent + " authorized for pickup (first in queue → current picker)");
+                System.out.println("✅ " + getLocalName() + " - " + robotAgent
+                        + " authorized for pickup (first in queue → current picker)");
                 return true;
             }
         }
 
-        System.out.println("⏸️ " + getLocalName() + " - " + robotAgent + " must wait (currentPicker: " + currentPickingRobot + ", Queue position: "
+        System.out.println("⏸️ " + getLocalName() + " - " + robotAgent + " must wait (currentPicker: "
+                + currentPickingRobot + ", Queue position: "
                 + getQueuePosition(robotAgent) + ")");
         return false;
     }
@@ -1465,8 +1471,9 @@ public class ConveyorAgent extends Agent {
      * Notify that robot has completed pickup
      */
     public synchronized void notifyPickupComplete(String robotAgent) {
-        System.out.println("📥 " + getLocalName() + " - notifyPickupComplete() called: robot=" + robotAgent + ", currentPicker=" + currentPickingRobot);
-        
+        System.out.println("📥 " + getLocalName() + " - notifyPickupComplete() called: robot=" + robotAgent
+                + ", currentPicker=" + currentPickingRobot);
+
         if (robotAgent.equals(currentPickingRobot)) {
             System.out.println("┌─ PICKUP COMPLETE ────────────────────────────────");
             System.out.println("│  ✅ CLEARING CURRENT PICKER");
@@ -1477,13 +1484,14 @@ public class ConveyorAgent extends Agent {
             System.out.println("│  New Picker: null");
             System.out.println("│  Queue Size: " + pickupQueue.size());
             System.out.println("└──────────────────────────────────────────────────");
-            
+
             currentPickingRobot = null;
 
             // Process next robot in queue
             processPickupQueue();
         } else {
-            System.out.println("⚠️ " + getLocalName() + " - Robot " + robotAgent + " is not the current picker (currentPicker: " + currentPickingRobot + "), ignoring notification");
+            System.out.println("⚠️ " + getLocalName() + " - Robot " + robotAgent
+                    + " is not the current picker (currentPicker: " + currentPickingRobot + "), ignoring notification");
         }
     }
 
