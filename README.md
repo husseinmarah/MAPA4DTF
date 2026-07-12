@@ -111,6 +111,73 @@ sequenceDiagram
 
 **Important Note:** The Federation Functional Address (FFA) is assigned to the agent (digital twin) as an identifier after there is a need to federate with other agents (digital twins). The FFA is used to provide **context** and **functional information** for enabling more efficient interactions between twins in the federation.
 
+#### FFA Structured Walkthrough
+
+The Federated Factory Address (FFA) follows a URN-compliant schema designed to securely identify digital twins across the federation. The schema is structured as follows:
+
+`urn:dtf:$h_1.\dots.h_n$:$l_1.\dots.l_k$:$s$$[.c]$$[\#\nu]$$[\texttt{::}\gamma]$$[\texttt{@}\phi]$`
+
+- **Static Prefix:** Identifies the core entity.
+  - `urn:dtf:`: The mandatory namespace identifier for the Digital Twin Federation.
+  - `$h_1.\dots.h_n$`: The hierarchical organizational domain (e.g., `EU:Plant`).
+  - `$l_1.\dots.l_k$`: The physical or logical location hierarchy.
+  - `$s$`: The base service or twin identifier.
+- **Dynamic Suffix:** Encodes context and capability state.
+  - `$[.c]$`: Capability or functional aspect (e.g., `.Move`).
+  - `$[\#\nu]$`: Versioning or instance index.
+  - `$[\texttt{::}\gamma]$`: Security or cryptographic binding.
+  - `$[\texttt{@}\phi]$`: Ephemeral context or state flags.
+
+#### FCP Engineering Specification
+
+The Federation Context Protocol (FCP) implements the engineering mechanisms required for robust semantic decoupling, mapping FCP primitives to standard FIPA-ACL communicative acts.
+
+- **Message Schemas:**
+  - **FCP-ALLOC:** Uses `REQUEST` / `INFORM` for address allocation and registration.
+  - **FCP-RESOLVE:** Uses `QUERY-REF` to resolve an FFA to a physical JADE AID.
+  - **FCP-UPDATE:** Handles capability or state updates.
+  - **FCP-HEARTBEAT:** Maintains liveness and prevents stale records.
+- **Lease Semantics:** Registrations are bound by a Time-To-Live (TTL) constraint of $T_{lease} = 30$ seconds. Agents must send FCP-HEARTBEAT messages to renew their leases, or their records are marked stale.
+- **Failure Cases and Timeout Behavior:** FCP implements explicit fallback mechanisms. The timeout duration is set to $T_{timeout} = 2000$ ms, supported by an exponential backoff strategy for up to $N_{retries} = 3$ retries.
+- **Consistency Model & Conflict Resolution:**
+  - **Consistency Model:** The federation maintains *eventual consistency* across distributed registries.
+  - **Conflict Resolution:** Conflicts are resolved using Keycloak credential validation, first-come-first-served timestamps, and predefined organizational priority rules.
+
+```mermaid
+sequenceDiagram
+    participant AMR as Digital Twin Agent (AMR)
+    participant FM as Federation Manager (FM)
+    participant SM as Security Manager (Keycloak & OPA)
+    participant FDS as Directory Service (FDS)
+
+    Note over AMR,FDS: Onboarding
+    AMR->>+FM: FCP-ALLOC (Registration)
+    FM->>+SM: Validate Identity & Capabilities
+    SM-->>-FM: Validation Result (Role, Trust)
+    FM->>FM: Assign Unique FFA
+    FM->>+FDS: Register Services & Metadata
+    FDS-->>-FM: Confirmation
+    FM-->>-AMR: Allocation Resp (FFA Assigned)
+
+    Note over AMR,FDS: Resolution
+    AMR->>+FDS: FCP-RESOLVE (Discover)
+    FDS->>FDS: Capability-based Matching
+    FDS-->>-AMR: Compatible Instances (FFAs)
+
+    Note over AMR,FDS: Updating
+    AMR->>+FM: FCP-UPDATE (Status: Active)
+    FM->>+FDS: Update Operational Metadata
+    FDS-->>-FM: Success
+    FM-->>-AMR: Acknowledgement
+
+    Note over AMR,FDS: Synchronisation
+    loop Periodic Interval
+        AMR->>+FM: FCP-HEARTBEAT (Real-time State)
+        FM->>FM: Health Monitor: Track Signals
+        FM-->>-AMR: Sync Ack
+    end
+```
+
 ### Security Services
 
 - Keycloak provides identity and authentication
