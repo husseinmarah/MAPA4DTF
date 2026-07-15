@@ -4,11 +4,11 @@ Multi-Agent Policy-Aware for Digital Twin Federation.
 
 ## Overview
 
-MAPA4DTF is a proof-of-concept platform for implementing multi-agent policy-aware digital twin federation. The platform uses a Java backend that leverages [JAVA Agent DEvelopment Framework](https://jade.tilab.com/) for realizing of multi-agent systems through a middle-ware that complies with the FIPA specifications. The policy-aware concept is supported via Docker-based security services that provide [Keycloak](https://www.keycloak.org/) for identity and access management, [Open Agent Policy](https://www.openpolicyagent.org/) for streamlined policy enforcement and management across the federation, and [Visual Components](https://www.visualcomponents.com/) for environment simulation. In addition, the platform provides a monitoring and control dashboard (for controlling trust scores and robot status) for a developed case study (Warehouse Multi-robot System) built with the React framework.
+MAPA4DTF is a proof-of-concept platform for implementing multi-agent policy-aware digital twin federation. The platform uses a Java backend that leverages [JAVA Agent DEvelopment Framework](https://jade.tilab.com/) for realizing of multi-agent systems through a middle-ware that complies with the FIPA specifications. The policy-aware concept is supported via Docker-based security services that provide [Keycloak](https://www.keycloak.org/) for identity and access management, [Open Agent Policy](https://www.openpolicyagent.org/) for streamlined policy enforcement and management across the federation, and [Visual Components](https://www.visualcomponents.com/) for physical environment simulation. In addition, the platform provides a monitoring and control dashboard (for controlling trust scores and robot status) for a developed case study (Warehouse Multi-robot System) built with the React framework.
 
 It includes:
 
-- a Java backend with OPC UA, JADE agents, Keycloak integration, and OPA policy enforcement
+- a Java backend with [OPC UA](https://github.com/eclipse-milo/milo), JADE agents, Keycloak integration, and OPA policy enforcement
 - a React frontend for live robot, conveyor, trust, and property monitoring
 - Docker-based security services for Keycloak and OPA
 - scripts for Visual Components simulations
@@ -115,18 +115,18 @@ sequenceDiagram
 
 The Federated Factory Address (FFA) follows a URN-compliant schema designed to securely identify digital twins across the federation. The schema is structured as follows:
 
-`urn:dtf:$h_1.\dots.h_n$:$l_1.\dots.l_k$:$s$$[.c]$$[\#\nu]$$[\texttt{::}\gamma]$$[\texttt{@}\phi]$`
+`urn:dtf:` $h_1.\dots.h_n$ `:` $l_1.\dots.l_k$ `:` $s$ $[.c]$ $[\nu]$ $[\texttt{::}\gamma]$ $[\texttt{@}\phi]$
 
 - **Static Prefix:** Identifies the core entity.
   - `urn:dtf:`: The mandatory namespace identifier for the Digital Twin Federation.
-  - `$h_1.\dots.h_n$`: The hierarchical organizational domain (e.g., `EU:Plant`).
-  - `$l_1.\dots.l_k$`: The physical or logical location hierarchy.
-  - `$s$`: The base service or twin identifier.
+  - $h_1.\dots.h_n$: The hierarchical organizational domain (e.g., `EU:Plant`).
+  - $l_1.\dots.l_k$: The physical or logical location hierarchy.
+  - $s$: The base service or twin identifier.
 - **Dynamic Suffix:** Encodes context and capability state.
-  - `$[.c]$`: Capability or functional aspect (e.g., `.Move`).
-  - `$[\#\nu]$`: Versioning or instance index.
-  - `$[\texttt{::}\gamma]$`: Security or cryptographic binding.
-  - `$[\texttt{@}\phi]$`: Ephemeral context or state flags.
+  - $[.c]$: Capability or functional aspect (e.g., `.Move`).
+  - $[\nu]$: Versioning or instance index.
+  - $[\texttt{::}\gamma]$: Security or cryptographic binding.
+  - $[\texttt{@}\phi]$: Ephemeral context or state flags.
 
 #### FCP Engineering Specification
 
