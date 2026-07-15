@@ -8,7 +8,7 @@ MAPA4DTF is a proof-of-concept platform for implementing multi-agent policy-awar
 
 It includes:
 
-- a Java backend with [OPC UA](https://github.com/eclipse-milo/milo), JADE agents, Keycloak integration, and OPA policy enforcement
+- a Java backend with [OPC UA](https://github.com/eclipse-milo/milo), JADE agents, [Keycloak](https://www.keycloak.org/) integration, and [OPA](https://www.openpolicyagent.org/) policy enforcement
 - a React frontend for live robot, conveyor, trust, and property monitoring
 - Docker-based security services for Keycloak and OPA
 - scripts for Visual Components simulations
