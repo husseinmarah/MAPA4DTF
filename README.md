@@ -226,6 +226,10 @@ The frontend is a React app located in [frontend/](frontend). It consumes the ba
 
 The Visual Components simulation is located in [vs-simulation/](vs-simulation). It uses the scene and configuration files defined in [configs/](configs).
 
+**Multi-robot Case:**
+The following figure shows the assets (robots and conveyor belts) operating within the Visual Components environment.
+![Visual Components](/asset/vc_multiple_robots.png)
+
 ## Visual Components Workflow
 
 Use this flow to start the simulation environment and connect it to the backend:
